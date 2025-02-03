@@ -32,6 +32,15 @@ class CustomErrorListener(ErrorListener):
                 f"Line {line}:{column} - {msg}"
             )
             self.errors.append(error_message)
+def find_duplicates(items):
+	seen = set()
+	duplicates = set()
+	for item in items:
+		if item in seen:
+			duplicates.add(item)
+		else:
+			seen.add(item)
+	return list(duplicates)
 # Function to process UVL file
 def process_uvl_file(file_path):
     try:
@@ -54,6 +63,12 @@ def process_uvl_file(file_path):
             return json.dumps({'valid': False, 'errors': error_listener.errors, 'warnings': error_listener.warnings})
         global fm
         fm = FLAMAFeatureModel(file_path)
+        duplicated_features = find_duplicates(fm.fm_model.get_features())
+        if duplicated_features:
+            errors = []
+            for duplicated in duplicated_features:
+                errors.append('The following feature is duplicated: {}'.format(duplicated))
+            return json.dumps({'valid': False, 'errors': errors})
 
         return json.dumps({'valid': True, 'modelInformation': get_model_information()})
     except Exception as e:
