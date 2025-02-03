@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.3.0](https://github.com/flamapy/flamapy-ide/compare/v1.2.1...v1.3.0) (2025-02-03)
+
+
+### Features
+
+* adding a strat from sample model feature ([f1694e8](https://github.com/flamapy/flamapy-ide/commit/f1694e8b799d24879b7871ae982abe3793e08de9))
+* Import FM from URL ([f092c00](https://github.com/flamapy/flamapy-ide/commit/f092c000662e982baf3dfb9817d43ecaaafdd641))
+
+
+### Bug Fixes
+
+* Fix duplicated features validation ([8d1d276](https://github.com/flamapy/flamapy-ide/commit/8d1d2769475acb82258e0da82e4fba3b1e18d793))
+
 ## [1.2.1](https://github.com/sebasruii/flamapy-ide/compare/v1.2.0...v1.2.1) (2024-10-09)
 
 
