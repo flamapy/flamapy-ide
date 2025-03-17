@@ -162,6 +162,11 @@ def feature_tree(node):
     res['attributes']['isMandatory'] = node.is_mandatory()
     res['attributes']['isOptional'] = node.is_optional()
     res['attributes']['isAbstract'] = node.is_abstract
+    res['attributes']['isMultifeature'] = node.is_multifeature()
+    res['attributes']['featureCardinality'] = dict()
+    res['attributes']['featureCardinality']['min'] = node.feature_cardinality.min
+    res['attributes']['featureCardinality']['max'] = node.feature_cardinality.max
+
     if node.get_children():
         res['attributes']['isAlternativeGroup'] = node.is_alternative_group()
         res['attributes']['isOrGroup'] = node.is_or_group()
