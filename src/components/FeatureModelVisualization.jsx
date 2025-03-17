@@ -81,7 +81,7 @@ const RenderRectSvgNode = ({ nodeDatum, toggleNode }) => {
         x="0"
         y="5"
         textAnchor="middle"
-        style={{ fontSize: `${fontSize}px`, fontWeight: "lighter" }}
+        style={{ fontSize: `${fontSize}px`, fontWeight: "lighter", fontStyle: isAbstract ? "italic" : "normal" }}
       >
         {nodeName}
       </text>
