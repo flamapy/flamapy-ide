@@ -44,9 +44,12 @@ const RenderRectSvgNode = ({ nodeDatum, toggleNode }) => {
   const isMultifeature = nodeDatum.attributes?.isMultifeature;
   const featureCardinalityMin = nodeDatum.attributes?.featureCardinality.min;
   const featureCardinalityMax = nodeDatum.attributes?.featureCardinality.max == -1 ? "*" : nodeDatum.attributes?.featureCardinality.max;
+  const featureCardinality = isMultifeature ? " [" + featureCardinalityMin + ".." + featureCardinalityMax + "]" : "";
+  const isNumerical = nodeDatum.attributes?.isNumerical;
+  const isString = nodeDatum.attributes?.isString;
+  const featureType = isNumerical || isString ? " : " + nodeDatum.attributes?.featureType : "";
 
-  const featureCardinality = featureCardinalityMin == 1 && featureCardinalityMax == 1 ? "" : " [" + featureCardinalityMin + ".." + featureCardinalityMax + "]";
-  const nodeName = nodeDatum.name + featureCardinality;
+  const nodeName = nodeDatum.name + featureCardinality + featureType;
   const defaultFontSize = 20;
 
   const [fontSize, setFontSize] = useState(defaultFontSize);

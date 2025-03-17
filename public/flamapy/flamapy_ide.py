@@ -166,6 +166,9 @@ def feature_tree(node):
     res['attributes']['featureCardinality'] = dict()
     res['attributes']['featureCardinality']['min'] = node.feature_cardinality.min
     res['attributes']['featureCardinality']['max'] = node.feature_cardinality.max
+    res['attributes']['isNumerical'] = node.is_numerical()
+    res['attributes']['isString'] = node.is_string()
+    res['attributes']['featureType'] = node.feature_type.value
 
     if node.get_children():
         res['attributes']['isAlternativeGroup'] = node.is_alternative_group()
