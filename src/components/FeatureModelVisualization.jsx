@@ -4,7 +4,7 @@ import Tree from "react-d3-tree";
 import { elementToSVG } from "dom-to-svg";
 
 // Function to draw an arc between the children
-const drawSemicircle = (rectWidth, rectHeight, isAlternative) => {
+const drawSemicircle = (rectWidth, rectHeight, isAlternative, isCardinalityGroup, card_min, card_max) => {
   const radius = rectWidth / 4;
   const startX = radius;
   const startY = rectHeight / 2;
@@ -12,6 +12,7 @@ const drawSemicircle = (rectWidth, rectHeight, isAlternative) => {
   const endY = rectHeight / 2;
 
   return (
+    <g>
     <path
       d={`M ${startX},${startY} A ${radius},${radius} 0 0,1 ${endX},${endY}`}
       fill={isAlternative ? "none" : "gray"}
@@ -19,6 +20,19 @@ const drawSemicircle = (rectWidth, rectHeight, isAlternative) => {
       strokeWidth="1"
       className="group"
     />
+    {isCardinalityGroup && (
+      <text
+        x="0"
+        y={endY + 15}
+        fill="white"
+        fontSize="12"
+        textAnchor="middle"
+        dominantBaseline="middle"
+      >
+        [{card_min}..{card_max}]
+      </text>
+    )}
+    </g>
   );
 };
 
@@ -40,9 +54,19 @@ const RenderRectSvgNode = ({ nodeDatum, toggleNode }) => {
   const isOptional = nodeDatum.attributes?.isOptional;
   const isAlternativeGroup = nodeDatum.attributes?.isAlternativeGroup;
   const isOrGroup = nodeDatum.attributes?.isOrGroup;
+  const isCardinalityGroup = nodeDatum.attributes?.isCardinalityGroup;
+  const cardinalityGroupMin = nodeDatum.attributes?.cardinalityGroup?.min;
+  const cardinalityGroupMax = nodeDatum.attributes?.cardinalityGroup?.max == -1 ? "*" : nodeDatum.attributes?.cardinalityGroup?.max;
   const isAbstract = nodeDatum.attributes?.isAbstract;
+  const isMultifeature = nodeDatum.attributes?.isMultifeature;
+  const featureCardinalityMin = nodeDatum.attributes?.featureCardinality.min;
+  const featureCardinalityMax = nodeDatum.attributes?.featureCardinality.max == -1 ? "*" : nodeDatum.attributes?.featureCardinality.max;
+  const featureCardinality = isMultifeature ? " [" + featureCardinalityMin + ".." + featureCardinalityMax + "]" : "";
+  const isNumerical = nodeDatum.attributes?.isNumerical;
+  const isString = nodeDatum.attributes?.isString;
+  const featureType = isNumerical || isString ? " : " + nodeDatum.attributes?.featureType : "";
 
-  const nodeName = nodeDatum.name;
+  const nodeName = nodeDatum.name + featureCardinality + featureType;
   const defaultFontSize = 20;
 
   const [fontSize, setFontSize] = useState(defaultFontSize);
@@ -81,7 +105,7 @@ const RenderRectSvgNode = ({ nodeDatum, toggleNode }) => {
         x="0"
         y="5"
         textAnchor="middle"
-        style={{ fontSize: `${fontSize}px`, fontWeight: "lighter" }}
+        style={{ fontSize: `${fontSize}px`, fontWeight: "lighter", fontStyle: isAbstract ? "italic" : "normal" }}
       >
         {nodeName}
       </text>
@@ -103,8 +127,8 @@ const RenderRectSvgNode = ({ nodeDatum, toggleNode }) => {
       )}
 
       {/* Render arc between children if it's an alternative group */}
-      {(isAlternativeGroup || isOrGroup) && (
-        <g>{drawSemicircle(rectWidth, rectHeight, isAlternativeGroup)}</g>
+      {(isAlternativeGroup || isOrGroup || isCardinalityGroup) && (
+        <g>{drawSemicircle(rectWidth, rectHeight, isAlternativeGroup, isCardinalityGroup, cardinalityGroupMin, cardinalityGroupMax)}</g>
       )}
     </g>
   );
