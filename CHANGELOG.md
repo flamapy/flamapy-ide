@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.4.0](https://github.com/flamapy/flamapy-ide/compare/v1.3.0...v1.4.0) (2025-04-09)
+
+
+### Features
+
+* first attempt to autogenerate wheels for the dependencies. See issue [#26](https://github.com/flamapy/flamapy-ide/issues/26) ([507a790](https://github.com/flamapy/flamapy-ide/commit/507a790706b4eca0bbdcd3f218034db6c3cce314))
+* Improve visualization component ([3f84b01](https://github.com/flamapy/flamapy-ide/commit/3f84b01de1c430749a244e37eb1cf83fb93e7614))
+* show abstract features in italics in the diagram ([04e2217](https://github.com/flamapy/flamapy-ide/commit/04e22179d077cb33c29ca9d66697860d8c1b7f82))
+* show cardinality groups in diagram ([34b4132](https://github.com/flamapy/flamapy-ide/commit/34b4132a403616ee71fbc13fdb4cb0a792f0e139))
+* show feature cardinality in diagram ([c3af2f6](https://github.com/flamapy/flamapy-ide/commit/c3af2f615a1cd2a37391e67bf08166f7844385e1))
+* show typed feature in diagram ([bd29433](https://github.com/flamapy/flamapy-ide/commit/bd29433b141440348be83a2677af7e792f629002))
+
+
+### Bug Fixes
+
+* Fix side pannel overflow ([54309df](https://github.com/flamapy/flamapy-ide/commit/54309dfe3fa377963b92b672c80d4a0224b8cbb9))
+
 ## [1.3.0](https://github.com/flamapy/flamapy-ide/compare/v1.2.1...v1.3.0) (2025-02-03)
 
 
