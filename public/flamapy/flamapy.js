@@ -18,8 +18,8 @@ class Flamapy {
     await pyodideInstance.runPythonAsync(`
   import micropip
   await micropip.install("flamapy/flamapy-2.0.1-py3-none-any.whl", deps=False)
-  await micropip.install("flamapy/flamapy_fw-2.0.1-py3-none-any.whl", deps=False)
-  await micropip.install("flamapy/flamapy_fm-2.0.1-py3-none-any.whl", deps=False)
+  await micropip.install("flamapy/flamapy_fw-2.0.2.dev0-py3-none-any.whl", deps=False)
+  await micropip.install("flamapy/flamapy_fm-2.0.2.dev0-py3-none-any.whl", deps=False)
   await micropip.install("flamapy/flamapy_sat-2.0.1-py3-none-any.whl", deps=False)
   await micropip.install("flamapy/flamapy_bdd-2.0.1-py3-none-any.whl", deps=False)
   await micropip.install("flamapy/dd-0.5.7-py3-none-any.whl", deps=False)

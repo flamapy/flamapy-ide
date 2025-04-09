@@ -162,9 +162,23 @@ def feature_tree(node):
     res['attributes']['isMandatory'] = node.is_mandatory()
     res['attributes']['isOptional'] = node.is_optional()
     res['attributes']['isAbstract'] = node.is_abstract
+    res['attributes']['isMultifeature'] = node.is_multifeature()
+    res['attributes']['featureCardinality'] = dict()
+    res['attributes']['featureCardinality']['min'] = node.feature_cardinality.min
+    res['attributes']['featureCardinality']['max'] = node.feature_cardinality.max
+    res['attributes']['isNumerical'] = node.is_numerical()
+    res['attributes']['isString'] = node.is_string()
+    res['attributes']['featureType'] = node.feature_type.value
+
     if node.get_children():
         res['attributes']['isAlternativeGroup'] = node.is_alternative_group()
         res['attributes']['isOrGroup'] = node.is_or_group()
+        res['attributes']['isCardinalityGroup'] = node.is_cardinality_group()
+        if node.is_cardinality_group():
+            res['attributes']['cardinalityGroup'] = dict()
+            cardinalityGroup = [relation for relation in node.get_relations() if relation.is_cardinal()]
+            res['attributes']['cardinalityGroup']['min'] = cardinalityGroup[0].card_min if cardinalityGroup else None
+            res['attributes']['cardinalityGroup']['max'] = cardinalityGroup[0].card_max if cardinalityGroup else None
         res['children'] = [feature_tree(child) for child in node.get_children()]
     return res
 

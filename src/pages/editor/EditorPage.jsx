@@ -316,10 +316,10 @@ function EditorPage({ selectedFile }) {
   };
 
   return (
-    <div className="flex flex-col h-full w-full">
+    <div className="flex-1 overflow-hidden flex flex-col">
       {/* Top Section */}
 
-      <div className="flex flex-1 p-2 gap-2">
+      <div className="flex flex-row flex-grow p-2 gap-2 overflow-auto">
         {/* Left Side Panel */}
         <TreeView
           treeData={featureTree}

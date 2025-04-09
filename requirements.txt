@@ -1,6 +1,6 @@
 flamapy==2.0.1
-flamapy_fw==2.0.1
-flamapy_fm==2.0.1
+./public/flamapy/flamapy_fw-2.0.2.dev0-py3-none-any.whl
+./public/flamapy/flamapy_fm-2.0.2.dev0-py3-none-any.whl
 flamapy_sat==2.0.1
 flamapy_bdd==2.0.1
 pytest==8.3.3
