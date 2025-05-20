@@ -65,7 +65,6 @@ function EditorPage({ selectedFile }) {
   const viewOptions = [
     { label: "Source View", value: "source" },
     { label: "Graph View", value: "graph" },
-    { label: "Configurator", value: "configurator" },
   ];
 
   function initializeWorker() {
@@ -248,23 +247,28 @@ function EditorPage({ selectedFile }) {
         await validateModel();
       }
       if (validation.valid) {
-        worker.postMessage({
-          action: "executeActionWithConf",
-          data: { action, configuration },
-        });
-        setIsRunning(true);
-        setOutput({ label: action.label, result: "Executing operation" });
-        worker.onmessage = (event) => {
-          if (event.data.results !== undefined) {
-            setOutput(event.data.results);
-          } else if (event.data.error) {
-            setOutput({
-              label: action.label,
-              result: `An exception has occurred when trying to execute the operation. Please check if the model is well defined.`,
-            });
-          }
-          setIsRunning(false);
-        };
+        if (action.isOperationWithConf) {
+          worker.postMessage({
+            action: "executeActionWithConf",
+            data: { action, configuration },
+          });
+          setIsRunning(true);
+          setOutput({ label: action.label, result: "Executing operation" });
+          worker.onmessage = (event) => {
+            if (event.data.results !== undefined) {
+              setOutput(event.data.results);
+            } else if (event.data.error) {
+              setOutput({
+                label: action.label,
+                result: `An exception has occurred when trying to execute the operation. Please check if the model is well defined.`,
+              });
+            }
+            setIsRunning(false);
+          };
+          
+        } else {
+          toggleView(action)
+        }
       } else {
         setOutput({
           label: action.label,
