@@ -9,6 +9,7 @@ import DropdownMenu from "../../components/DropdownMenu";
 import { saveAs } from "file-saver";
 import TreeView from "../../components/FeatureTree";
 import FeatureModelVisualization from "../../components/FeatureModelVisualization";
+import Wizzard from "../../components/Wizzard";
 
 function EditorPage({ selectedFile }) {
   const [worker, setWorker] = useState(null);
@@ -24,7 +25,7 @@ function EditorPage({ selectedFile }) {
       : "FlamapyIDE is starting",
   });
   const [featureTree, setFeatureTree] = useState(null);
-  const [isEditorVisible, setIsEditorVisible] = useState(true);
+  const [currentView, setCurrentView] = useState("source");
   const [constraints, setConstraints] = useState(null);
 
   const editorRef = useRef(null);
@@ -59,6 +60,12 @@ function EditorPage({ selectedFile }) {
     { label: "JSON", value: "json" },
     { label: "SPLOT", value: "sxfm" },
     { label: "Download UVL", value: "uvl" },
+  ];
+
+  const viewOptions = [
+    { label: "Source View", value: "source" },
+    { label: "Graph View", value: "graph" },
+    { label: "Configurator", value: "configurator" },
   ];
 
   function initializeWorker() {
@@ -298,19 +305,27 @@ function EditorPage({ selectedFile }) {
     }
   }
 
-  const toggleView = async () => {
+  const toggleView = async (option) => {
     if (isLoaded) {
       if (validation == null) {
         await validateModel();
       }
       if (validation?.valid) {
-        setIsEditorVisible(!isEditorVisible);
+        setCurrentView(option.value);
       } else {
-        setOutput({
-          label: "Visualize model",
-          result:
-            "The model is not valid. Check for syntax errors and retry once the model is valid",
-        });
+        if (option.value === "graph") {
+          setOutput({
+            label: "Visualize model",
+            result:
+              "The model is not valid. Check for syntax errors and retry once the model is valid",
+          });
+        } else if (option.value === "configurator") {
+          setOutput({
+            label: "Configure model",
+            result:
+              "The model is not valid. Check for syntax errors and retry once the model is valid",
+          });
+        }
       }
     }
   };
@@ -345,26 +360,27 @@ function EditorPage({ selectedFile }) {
               options={exportOperations}
               executeAction={downloadFile}
             />
-            <button
-              onClick={toggleView}
+            <DropdownMenu
+              buttonLabel={"Select View"}
+              options={viewOptions}
+              executeAction={toggleView}
               className="bg-blue-500 text-white p-2 rounded"
-            >
-              {isEditorVisible ? "View Graph" : "View code"}
-            </button>
+            />
           </Toolbar>
           {/* Text Editor or feature model */}
           <UVLEditor
             editorRef={editorRef}
             validateModel={validateModel}
             defaultCode={editorRef?.current?.getValue()}
-            hide={!isEditorVisible}
+            hide={currentView !== "source"}
           />
-          {!isEditorVisible && (
+          {currentView === "graph" && (
             <FeatureModelVisualization
               treeData={featureTree}
               constraints={constraints}
             />
           )}
+          {currentView === "configurator" && <Wizzard worker={worker} />}
 
           {/* Bottom Panel */}
           <ExecutionOutput

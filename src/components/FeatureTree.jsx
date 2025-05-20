@@ -3,91 +3,85 @@ import { useEffect, useState } from "react";
 import { ResizableBox } from "react-resizable";
 import DropdownMenu from "./DropdownMenu";
 
-// TreeNode component for each node in the tree
+// TreeNode component
 const TreeNode = ({ node, statusMap, setStatusMap }) => {
   const [isExpanded, setIsExpanded] = useState(false);
+  const currentStatus = statusMap[node.name];
 
-  const initialStatus = statusMap[node.name];
-
-  // Handle expanding/collapsing of the tree node
   const handleExpandToggle = () => {
-    if (node.children) {
-      setIsExpanded(!isExpanded); // Toggle expand/collapse
-    }
+    if (node.children) setIsExpanded((prev) => !prev);
   };
 
-  // Handle button click to toggle status
   const handleStatusToggle = () => {
-    let newStatus;
-    switch (statusMap[node.name]) {
-      case true:
-        newStatus = false;
-        break;
-      case false:
-        newStatus = undefined;
-        break;
-      default:
-        newStatus = true;
-        break;
-    }
+    const newStatus =
+      currentStatus === true
+        ? false
+        : currentStatus === false
+        ? undefined
+        : true;
 
-    setStatusMap((prevStatusMap) => {
-      const updatedMap = { ...prevStatusMap };
+    setStatusMap((prev) => {
+      const updated = { ...prev };
       if (newStatus === undefined) {
-        delete updatedMap[node.name];
+        delete updated[node.name];
       } else {
-        updatedMap[node.name] = newStatus;
+        updated[node.name] = newStatus;
       }
-      return updatedMap;
+      return updated;
     });
   };
 
+  const getStatusLabel = (status) => {
+    if (status === true) return "✔️";
+    if (status === false) return "❌";
+    return "—";
+  };
+
+  const getStatusColor = (status) => {
+    if (status === true) return "bg-green-500";
+    if (status === false) return "bg-red-300";
+    return "bg-gray-400";
+  };
+
   return (
-    <div className="ml-4 mt-2">
-      {/* Node Name with expand/collapse toggle */}
-      <div className="flex justify-between items-center">
-        <div className="flex items-center">
-          {/* Toggle button to expand/collapse children */}
+    <div className="ml-4 mt-2 space-y-1">
+      <div className="flex justify-between items-center bg-white rounded px-2 py-1 shadow-sm hover:shadow-md transition-shadow">
+        <div className="flex items-center gap-2">
           {node.children && (
             <button
               onClick={handleExpandToggle}
-              className="mr-2 focus:outline-none ml-2 p-1 text-white rounded bg-gray-500"
+              className="text-sm px-1 rounded bg-gray-300 hover:bg-gray-400 transition-colors"
+              aria-label="Toggle expand"
             >
-              {isExpanded ? "-" : "+"}
+              {isExpanded ? "−" : "+"}
             </button>
           )}
-
-          {/* Node Name */}
           <div
-            className="cursor-pointer font-semibold"
-            style={{ color: node.children ? "blue" : "black" }} // Color nodes with children
+            className={`font-medium cursor-default ${
+              node.children ? "text-blue-700" : "text-black"
+            }`}
           >
             {node.name}
           </div>
         </div>
 
-        {/* Status Button */}
         <button
           onClick={handleStatusToggle}
-          className={`ml-2 p-1 text-white rounded ${
-            initialStatus === undefined
-              ? "bg-gray-500"
-              : initialStatus
-              ? "bg-green-500"
-              : "bg-red-500"
-          }`}
+          className={`text-white text-sm px-2 py-1 rounded ${getStatusColor(
+            currentStatus
+          )} transition-colors hover:brightness-110`}
+          aria-label="Toggle status"
         >
-          {initialStatus?.toString() || "undefined"}
+          {getStatusLabel(currentStatus)}
         </button>
       </div>
 
-      {/* Show children if expanded */}
       {isExpanded && node.children && (
-        <div>
-          {node.children.map((childNode, index) => (
+        <div className="ml-2 border-l border-gray-300 pl-2">
+          {node.children.map((child, i) => (
             <TreeNode
-              key={index}
-              node={childNode}
+              key={`${node.name}-${i}`}
+              node={child}
               statusMap={statusMap}
               setStatusMap={setStatusMap}
             />
@@ -98,7 +92,7 @@ const TreeNode = ({ node, statusMap, setStatusMap }) => {
   );
 };
 
-// TreeView component to render the full tree
+// TreeView component
 const TreeView = ({ treeData, executeAction }) => {
   const SATOperations = [
     { label: "Valid Configuration", value: "PySATSatisfiableConfiguration" },
@@ -107,29 +101,28 @@ const TreeView = ({ treeData, executeAction }) => {
   const [statusMap, setStatusMap] = useState({});
 
   useEffect(() => {
-    setStatusMap(() => {
-      return {};
-    });
+    setStatusMap({});
   }, [treeData]);
+
   return (
     <ResizableBox
       width={300}
       height={Infinity}
       axis="x"
-      minConstraints={[150, Infinity]}
+      minConstraints={[200, Infinity]}
       maxConstraints={[500, Infinity]}
-      className="bg-neutral-300 text-neutral-900 p-4 resize-handle-right rounded-lg overflow-auto"
+      className="bg-neutral-300 text-neutral-900 p-4 resize-handle-right rounded-lg overflow-auto relative shadow-md"
       handle={
-        <div className="absolute right-0 top-0 h-full w-2 cursor-ew-resize" />
+        <div className="absolute right-0 top-0 h-full w-2 cursor-ew-resize z-20" />
       }
     >
-      <div>
+      <div className="space-y-4">
         <DropdownMenu
-          buttonLabel={"Configure"}
+          buttonLabel={"Configuration Operations"}
           options={SATOperations}
           executeAction={(action) => executeAction(action, statusMap)}
         />
-        {/* Render TreeNode with status tracking */}
+
         {treeData && (
           <TreeNode
             node={treeData}

@@ -29,6 +29,7 @@ class Flamapy {
   await micropip.install("flamapy/uvlparser-2.0.1-py3-none-any.whl", deps=False)
   await micropip.install("flamapy/afmparser-1.0.3-py3-none-any.whl", deps=False)
   await micropip.install("flamapy/antlr4_python3_runtime-4.13.1-py3-none-any.whl", deps=False)
+  await micropip.install("flamapy/flamapy_configurator-2.0.1-py3-none-any.whl", deps=False)
   `);
     await pyodideInstance.runPythonAsync(await pythonFile.text());
     pyodideInstance.FS.mkdir("export");
@@ -121,5 +122,24 @@ class Flamapy {
         return { label: data.action.label, result };
       }
     }
+  }
+
+  async startConfigurator() {
+    const result = await this.pyodide.runPythonAsync(`
+  start_configurator()`);
+    return JSON.parse(result);
+  }
+
+  async answerQuestion(answer) {
+    this.pyodide.globals.set("answer", answer);
+    const result = await this.pyodide.runPythonAsync(`
+  answer_question(answer)`);
+    return JSON.parse(result);
+  }
+
+  async undoAnswer() {
+    const result = await this.pyodide.runPythonAsync(`
+  undo_answer()`);
+    return JSON.parse(result);
   }
 }

@@ -8,9 +8,12 @@ from antlr4.error.ErrorListener import ErrorListener
 from flamapy.core.discover import DiscoverMetamodels
 from flamapy.metamodels.fm_metamodel.transformations import GlencoeReader, AFMReader, FeatureIDEReader, JSONReader, XMLReader, UVLReader, GlencoeWriter
 from flamapy.metamodels.configuration_metamodel.models import Configuration
+from flamapy.metamodels.configurator_metamodel.transformation import FmToConfigurator
 from collections import defaultdict
 
 fm = None
+configurator = None
+
   
 # Custom error listener
 class CustomErrorListener(ErrorListener):
@@ -212,3 +215,29 @@ def execute_configurator_operation(name: str, conf):
     if type(result) is list:
         return [str(conf) for conf in result]
     return result
+
+def start_configurator():
+    global configurator
+    configurator = FmToConfigurator(fm.fm_model).transform()
+    configurator.start()
+    
+    return json.dumps(configurator.get_current_status())
+
+def answer_question(answer):
+    valid = configurator.answer_question(answer)
+
+    result = dict()
+    result['valid'] = valid
+    if valid:
+        if configurator.next_question():
+            result['nextQuestion'] = configurator.get_current_status()
+        else:
+            result['configuration'] = configurator._get_configuration()
+    else:
+        result['contradiction'] = {'msg': 'The selected choice is incompatible with the model definition. Please choose another option.'}
+    
+    return json.dumps(result)
+
+def undo_answer():
+    configurator.previous_question()
+    return json.dumps(configurator.get_current_status())
