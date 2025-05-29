@@ -95,9 +95,21 @@ const TreeNode = ({ node, statusMap, setStatusMap }) => {
 // TreeView component
 const TreeView = ({ treeData, executeAction }) => {
   const SATOperations = [
-    { label: "Valid Configuration", value: "PySATSatisfiableConfiguration" , isOperationWithConf: true},
-    { label: "Interactive Configuration", value: "configurator", isOperationWithConf: false},
-
+    {
+      label: "Valid Configuration",
+      value: "PySATSatisfiableConfiguration",
+      isOperationWithConf: true,
+    },
+    {
+      label: "Interactive Configuration",
+      value: "configurator",
+      isOperationWithConf: false,
+    },
+    {
+      label: "Download Configurator",
+      value: "downloadConfigurator",
+      isOperationWithConf: false,
+    },
   ];
 
   const [statusMap, setStatusMap] = useState({});

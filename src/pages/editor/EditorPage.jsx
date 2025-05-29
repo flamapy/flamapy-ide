@@ -10,6 +10,7 @@ import { saveAs } from "file-saver";
 import TreeView from "../../components/FeatureTree";
 import FeatureModelVisualization from "../../components/FeatureModelVisualization";
 import Wizzard from "../../components/Wizzard";
+import JSZip from "jszip";
 
 function EditorPage({ selectedFile }) {
   const [worker, setWorker] = useState(null);
@@ -265,9 +266,44 @@ function EditorPage({ selectedFile }) {
             }
             setIsRunning(false);
           };
-          
         } else {
-          toggleView(action)
+          if (action.value === "configurator") {
+            toggleView(action);
+          } else if (action.value === "downloadConfigurator") {
+            const zip = new JSZip();
+
+            try {
+              // Fetch base ZIP
+              const response = await fetch("/assets/flamapy.conf.zip");
+              if (!response.ok) throw new Error("Failed to load base.zip");
+
+              const baseZipBlob = await response.blob();
+              const baseZipArrayBuffer = await baseZipBlob.arrayBuffer();
+
+              // Load the ZIP content
+              const baseZip = await JSZip.loadAsync(baseZipArrayBuffer);
+
+              // Copy contents from base ZIP into our new ZIP
+              baseZip.forEach((relativePath, file) => {
+                zip.file(relativePath, file.async("arraybuffer"));
+              });
+
+              // Add the feature model file
+              const featureModel = new File(
+                [editorRef.current.getValue()],
+                "FeatureModel.uvl",
+                { type: "text/plain" }
+              );
+              zip.file(`models/${featureModel.name}`, featureModel);
+
+              // Generate and trigger download
+              const newZipBlob = await zip.generateAsync({ type: "blob" });
+              saveAs(newZipBlob, "configurator.zip");
+            } catch (err) {
+              console.error("Error processing ZIP:", err);
+              alert("Failed to generate ZIP.");
+            }
+          }
         }
       } else {
         setOutput({
