@@ -33,6 +33,12 @@ self.onmessage = async (event) => {
       results = await self.flamapy.getFeatures();
     } else if (action === "executeActionWithConf") {
       results = await self.flamapy.executeActionWithConf(data);
+    } else if (action === "startConfigurator") {
+      results = await self.flamapy.startConfigurator();
+    } else if (action === "answerQuestion") {
+      results = await self.flamapy.answerQuestion(data);
+    } else if (action === "undoAnswer") {
+      results = await self.flamapy.undoAnswer();
     }
 
     self.postMessage({ results, action });

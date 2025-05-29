@@ -9,6 +9,8 @@ import DropdownMenu from "../../components/DropdownMenu";
 import { saveAs } from "file-saver";
 import TreeView from "../../components/FeatureTree";
 import FeatureModelVisualization from "../../components/FeatureModelVisualization";
+import Wizzard from "../../components/Wizzard";
+import JSZip from "jszip";
 
 function EditorPage({ selectedFile }) {
   const [worker, setWorker] = useState(null);
@@ -24,7 +26,7 @@ function EditorPage({ selectedFile }) {
       : "FlamapyIDE is starting",
   });
   const [featureTree, setFeatureTree] = useState(null);
-  const [isEditorVisible, setIsEditorVisible] = useState(true);
+  const [currentView, setCurrentView] = useState("source");
   const [constraints, setConstraints] = useState(null);
 
   const editorRef = useRef(null);
@@ -59,6 +61,11 @@ function EditorPage({ selectedFile }) {
     { label: "JSON", value: "json" },
     { label: "SPLOT", value: "sxfm" },
     { label: "Download UVL", value: "uvl" },
+  ];
+
+  const viewOptions = [
+    { label: "Source View", value: "source" },
+    { label: "Graph View", value: "graph" },
   ];
 
   function initializeWorker() {
@@ -241,23 +248,63 @@ function EditorPage({ selectedFile }) {
         await validateModel();
       }
       if (validation.valid) {
-        worker.postMessage({
-          action: "executeActionWithConf",
-          data: { action, configuration },
-        });
-        setIsRunning(true);
-        setOutput({ label: action.label, result: "Executing operation" });
-        worker.onmessage = (event) => {
-          if (event.data.results !== undefined) {
-            setOutput(event.data.results);
-          } else if (event.data.error) {
-            setOutput({
-              label: action.label,
-              result: `An exception has occurred when trying to execute the operation. Please check if the model is well defined.`,
-            });
+        if (action.isOperationWithConf) {
+          worker.postMessage({
+            action: "executeActionWithConf",
+            data: { action, configuration },
+          });
+          setIsRunning(true);
+          setOutput({ label: action.label, result: "Executing operation" });
+          worker.onmessage = (event) => {
+            if (event.data.results !== undefined) {
+              setOutput(event.data.results);
+            } else if (event.data.error) {
+              setOutput({
+                label: action.label,
+                result: `An exception has occurred when trying to execute the operation. Please check if the model is well defined.`,
+              });
+            }
+            setIsRunning(false);
+          };
+        } else {
+          if (action.value === "configurator") {
+            toggleView(action);
+          } else if (action.value === "downloadConfigurator") {
+            const zip = new JSZip();
+
+            try {
+              // Fetch base ZIP
+              const response = await fetch("/assets/flamapy.conf.zip");
+              if (!response.ok) throw new Error("Failed to load base.zip");
+
+              const baseZipBlob = await response.blob();
+              const baseZipArrayBuffer = await baseZipBlob.arrayBuffer();
+
+              // Load the ZIP content
+              const baseZip = await JSZip.loadAsync(baseZipArrayBuffer);
+
+              // Copy contents from base ZIP into our new ZIP
+              baseZip.forEach((relativePath, file) => {
+                zip.file(relativePath, file.async("arraybuffer"));
+              });
+
+              // Add the feature model file
+              const featureModel = new File(
+                [editorRef.current.getValue()],
+                "FeatureModel.uvl",
+                { type: "text/plain" }
+              );
+              zip.file(`models/${featureModel.name}`, featureModel);
+
+              // Generate and trigger download
+              const newZipBlob = await zip.generateAsync({ type: "blob" });
+              saveAs(newZipBlob, "configurator.zip");
+            } catch (err) {
+              console.error("Error processing ZIP:", err);
+              alert("Failed to generate ZIP.");
+            }
           }
-          setIsRunning(false);
-        };
+        }
       } else {
         setOutput({
           label: action.label,
@@ -298,19 +345,27 @@ function EditorPage({ selectedFile }) {
     }
   }
 
-  const toggleView = async () => {
+  const toggleView = async (option) => {
     if (isLoaded) {
       if (validation == null) {
         await validateModel();
       }
       if (validation?.valid) {
-        setIsEditorVisible(!isEditorVisible);
+        setCurrentView(option.value);
       } else {
-        setOutput({
-          label: "Visualize model",
-          result:
-            "The model is not valid. Check for syntax errors and retry once the model is valid",
-        });
+        if (option.value === "graph") {
+          setOutput({
+            label: "Visualize model",
+            result:
+              "The model is not valid. Check for syntax errors and retry once the model is valid",
+          });
+        } else if (option.value === "configurator") {
+          setOutput({
+            label: "Configure model",
+            result:
+              "The model is not valid. Check for syntax errors and retry once the model is valid",
+          });
+        }
       }
     }
   };
@@ -345,26 +400,27 @@ function EditorPage({ selectedFile }) {
               options={exportOperations}
               executeAction={downloadFile}
             />
-            <button
-              onClick={toggleView}
+            <DropdownMenu
+              buttonLabel={"Select View"}
+              options={viewOptions}
+              executeAction={toggleView}
               className="bg-blue-500 text-white p-2 rounded"
-            >
-              {isEditorVisible ? "View Graph" : "View code"}
-            </button>
+            />
           </Toolbar>
           {/* Text Editor or feature model */}
           <UVLEditor
             editorRef={editorRef}
             validateModel={validateModel}
             defaultCode={editorRef?.current?.getValue()}
-            hide={!isEditorVisible}
+            hide={currentView !== "source"}
           />
-          {!isEditorVisible && (
+          {currentView === "graph" && (
             <FeatureModelVisualization
               treeData={featureTree}
               constraints={constraints}
             />
           )}
+          {currentView === "configurator" && <Wizzard worker={worker} />}
 
           {/* Bottom Panel */}
           <ExecutionOutput
