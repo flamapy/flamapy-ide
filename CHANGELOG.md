@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.5.0](https://github.com/flamapy/flamapy-ide/compare/v1.4.0...v1.5.0) (2025-06-03)
+
+
+### Features
+
+* Add links to GitHub and Article reference ([02d7031](https://github.com/flamapy/flamapy-ide/commit/02d7031a19ae21a888f950d6187dd02965500087))
+* Display propagation on feature tree ([cac550a](https://github.com/flamapy/flamapy-ide/commit/cac550a6de2feeda8a4d8256d7286535b637a2ff))
+
 ## [1.4.0](https://github.com/flamapy/flamapy-ide/compare/v1.3.0...v1.4.0) (2025-05-29)
 
 
