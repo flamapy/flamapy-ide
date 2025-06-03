@@ -5,7 +5,7 @@ import Question from "./Question";
 import Information from "./Information";
 import Configuration from "./Configuration";
 
-function Wizzard({ worker }) {
+function Wizzard({ worker, setHistory }) {
   const cancelURL = import.meta.env?.VITE_CANCEL_CONFIGURATION_URL;
   const applyURL = import.meta.env?.VITE_APPLY_CONFIGURATION_URL;
 
@@ -28,9 +28,12 @@ function Wizzard({ worker }) {
       if (event.data.results !== undefined) {
         setMessage(null);
         setCurrentQuestion(event.data.results);
+        setHistory(event.data.results.history);
         setIsImported(true);
       }
     };
+
+    return () => setHistory(null)
   }, [worker]);
 
   async function answerQuestion() {
@@ -52,6 +55,7 @@ function Wizzard({ worker }) {
               setCurrentQuestion(event.data.results.nextQuestion);
               setMessage(null);
             }
+            setHistory(event.data.results.history);
           } else {
             setMessage({ type: "error", msg: results.contradiction.msg });
           }
@@ -70,6 +74,8 @@ function Wizzard({ worker }) {
         setCurrentQuestion(results);
         if (configuration) setConfiguration(null);
         setSelectedAnswer([]);
+        setMessage(null)
+        setHistory(event.data.results.history);
       };
     }
   }

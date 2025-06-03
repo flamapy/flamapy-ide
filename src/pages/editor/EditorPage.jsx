@@ -28,6 +28,7 @@ function EditorPage({ selectedFile }) {
   const [featureTree, setFeatureTree] = useState(null);
   const [currentView, setCurrentView] = useState("source");
   const [constraints, setConstraints] = useState(null);
+  const [history, setHistory] = useState(null)
 
   const editorRef = useRef(null);
 
@@ -379,6 +380,7 @@ function EditorPage({ selectedFile }) {
         <TreeView
           treeData={featureTree}
           executeAction={executeActionWithConf}
+          history={history}
         />
 
         {/* Center Section (Text Editor/Feature Model + Bottom Panel) */}
@@ -420,7 +422,7 @@ function EditorPage({ selectedFile }) {
               constraints={constraints}
             />
           )}
-          {currentView === "configurator" && <Wizzard worker={worker} />}
+          {currentView === "configurator" && <Wizzard worker={worker} setHistory={setHistory} />}
 
           {/* Bottom Panel */}
           <ExecutionOutput
