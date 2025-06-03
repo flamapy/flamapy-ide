@@ -221,7 +221,8 @@ def start_configurator():
     configurator = FmToConfigurator(fm.fm_model).transform()
     configurator.start()
     
-    return json.dumps(configurator.get_current_status())
+    result = configurator.get_current_status()
+    return json.dumps(result)
 
 def answer_question(answer):
     valid = configurator.answer_question(answer)
@@ -236,8 +237,13 @@ def answer_question(answer):
     else:
         result['contradiction'] = {'msg': 'The selected choice is incompatible with the model definition. Please choose another option.'}
     
+    result['history'] = configurator._get_configuration()
     return json.dumps(result)
 
 def undo_answer():
     configurator.previous_question()
-    return json.dumps(configurator.get_current_status())
+
+    result = configurator.get_current_status()
+    result['history'] = configurator._get_configuration()
+
+    return json.dumps(result)

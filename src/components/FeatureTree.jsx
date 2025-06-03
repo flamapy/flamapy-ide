@@ -4,9 +4,9 @@ import { ResizableBox } from "react-resizable";
 import DropdownMenu from "./DropdownMenu";
 
 // TreeNode component
-const TreeNode = ({ node, statusMap, setStatusMap }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
-  const currentStatus = statusMap[node.name];
+const TreeNode = ({ node, statusMap, setStatusMap, history }) => {
+  const [isExpanded, setIsExpanded] = useState(true);
+  const currentStatus = history ? history[node.name]: statusMap[node.name];
 
   const handleExpandToggle = () => {
     if (node.children) setIsExpanded((prev) => !prev);
@@ -50,7 +50,7 @@ const TreeNode = ({ node, statusMap, setStatusMap }) => {
           {node.children && (
             <button
               onClick={handleExpandToggle}
-              className="text-sm px-1 rounded bg-gray-300 hover:bg-gray-400 transition-colors"
+              className={`text-sm px-1 rounded bg-gray-300 hover:bg-gray-400 transition-colors ${history ? 'disabled': ''}`}
               aria-label="Toggle expand"
             >
               {isExpanded ? "−" : "+"}
@@ -84,6 +84,7 @@ const TreeNode = ({ node, statusMap, setStatusMap }) => {
               node={child}
               statusMap={statusMap}
               setStatusMap={setStatusMap}
+              history={history}
             />
           ))}
         </div>
@@ -93,7 +94,7 @@ const TreeNode = ({ node, statusMap, setStatusMap }) => {
 };
 
 // TreeView component
-const TreeView = ({ treeData, executeAction }) => {
+const TreeView = ({ treeData, executeAction, history }) => {
   const SATOperations = [
     {
       label: "Valid Configuration",
@@ -116,7 +117,9 @@ const TreeView = ({ treeData, executeAction }) => {
 
   useEffect(() => {
     setStatusMap({});
-  }, [treeData]);
+    console.log(history);
+    
+  }, [treeData, history]);
 
   return (
     <ResizableBox
@@ -142,6 +145,7 @@ const TreeView = ({ treeData, executeAction }) => {
             node={treeData}
             statusMap={statusMap}
             setStatusMap={setStatusMap}
+            history={history}
           />
         )}
       </div>
