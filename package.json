@@ -13,10 +13,13 @@
     "@monaco-editor/react": "^4.6.0",
     "dom-to-svg": "^0.12.2",
     "file-saver": "^2.0.5",
+    "js-cookie": "^3.0.5",
     "jszip": "^3.10.1",
     "react": "^18.3.1",
+    "react-cookie-consent": "^9.0.0",
     "react-d3-tree": "^3.6.2",
     "react-dom": "^18.3.1",
+    "react-ga4": "^2.1.0",
     "react-resizable": "^3.0.5",
     "react-router-dom": "^6.25.1"
   },
