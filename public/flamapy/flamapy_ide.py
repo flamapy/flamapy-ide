@@ -10,6 +10,7 @@ from flamapy.metamodels.fm_metamodel.transformations import GlencoeReader, AFMRe
 from flamapy.metamodels.configuration_metamodel.models import Configuration
 from flamapy.metamodels.configurator_metamodel.transformation import FmToConfigurator
 from collections import defaultdict
+from flamapy.metamodels.fm_metamodel.operations import FMLanguageLevel
 
 fm = None
 configurator = None
@@ -82,6 +83,7 @@ def process_uvl_file(file_path):
 def get_model_information():
     model_information = dict()
 
+    model_information['Language Level'] = get_language_level(fm)
     model_information['Average Branching Factor'] = fm.average_branching_factor()
     model_information['Leaf Number'] = fm.count_leafs()
     model_information['Estimated Number of Configurations'] = fm.estimated_number_of_configurations()
@@ -90,6 +92,14 @@ def get_model_information():
     model_information['Core Features'] = fm.core_features()
     model_information['Leaf Features'] = fm.leaf_features()
     return model_information
+
+
+def get_language_level(fm: FLAMAFeatureModel):
+    levels = FMLanguageLevel().execute(fm.fm_model).get_result()
+    major_level = levels.major.name.capitalize()
+    minors_levels = ', '.join([m.name.replace('_', ' ').capitalize() for m in levels.minors])
+    return f'{major_level}{f' ({minors_levels})' if minors_levels else ""}'
+
 
 def execute_pysat_operation(name: str):
     dm = DiscoverMetamodels()
