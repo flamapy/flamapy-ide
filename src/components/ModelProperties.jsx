@@ -24,6 +24,10 @@ const ModelProperties = ({ modelProperties }) => {
           </div>
         ))}
       </div>
+
+      <h2 className="text-[#0D486C] font-bold text-2xl mb-4">
+        Open in <img src="/assets/logo_fmfactlabel.svg" alt="FM Fact Label" className="inline h-16 w-16 align-middle" />
+      </h2>
     </div>
   );
 };
