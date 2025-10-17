@@ -11,6 +11,12 @@ from flamapy.metamodels.configuration_metamodel.models import Configuration
 from flamapy.metamodels.configurator_metamodel.transformation import FmToConfigurator
 from collections import defaultdict
 from flamapy.metamodels.fm_metamodel.operations import FMLanguageLevel
+from flamapy.metamodels.fm_metamodel.models import AttributeType
+
+from flamapy.metamodels.z3_metamodel.transformations import FmToZ3
+from flamapy.metamodels.z3_metamodel.operations import Z3AttributeOptimization
+from flamapy.metamodels.z3_metamodel.operations.interfaces import OptimizationGoal
+
 
 fm = None
 configurator = None
@@ -118,6 +124,17 @@ def execute_pysat_operation(name: str):
         operation = dm.get_operation(sat_model, name)
         # Execute the operation
         operation.execute(sat_model)
+    
+    elif 'Z3' in name:
+        print(f"Executing Z3 operation {name}")
+        z3_model = dm.use_transformation_m2m(feature_model, "z3")
+        #z3_model = FmToZ3(feature_model).transform()
+        # Get the operation
+        #operation = Z3Satisfiable()
+        operation = dm.get_operation(z3_model, name)
+        # Execute the operation
+        operation.execute(z3_model)
+        
     # Get and print the result
     result = operation.get_result()
     if type(result) is list:
@@ -182,6 +199,7 @@ def feature_tree(node):
     res['attributes']['isNumerical'] = node.is_numerical()
     res['attributes']['isString'] = node.is_string()
     res['attributes']['featureType'] = node.feature_type.value
+    res['attributes']['attributes'] = node.get_attributes()
 
     if node.get_children():
         res['attributes']['isAlternativeGroup'] = node.is_alternative_group()
@@ -199,6 +217,13 @@ def get_features():
     if fm:
         features = [feature.name for feature in fm.fm_model.get_features()]
         return features
+
+def get_numerical_attributes():
+    if fm:
+        attributes = {attr.name for attr in fm.fm_model.get_attributes() if attr.attribute_type in [AttributeType.INTEGER, AttributeType.REAL]}
+        attributes = list(attributes)
+        print("Numerical attributes:", attributes)
+        return attributes
 
 def execute_configurator_operation(name: str, conf):
     dm = DiscoverMetamodels()
@@ -225,6 +250,27 @@ def execute_configurator_operation(name: str, conf):
     if type(result) is list:
         return [str(conf) for conf in result]
     return result
+
+def execute_attribute_optimization(attributes_goals):
+    feature_model = fm.fm_model
+    z3_model = FmToZ3(feature_model).transform()
+
+    attribute_optimization_op = Z3AttributeOptimization()
+    attributes = dict()
+    for attr_goal_dict in attributes_goals:
+        attr_name = attr_goal_dict['attribute']
+        goal_str = attr_goal_dict['goal']
+        attributes[attr_name] = OptimizationGoal.MINIMIZE if goal_str == 'Minimize' else OptimizationGoal.MAXIMIZE
+    attribute_optimization_op.set_attributes(attributes)
+
+    configurations_with_values = attribute_optimization_op.execute(z3_model).get_result()
+    results = []
+    for i, config_value in enumerate(configurations_with_values, 1):
+        config, values = config_value
+        config_str = ', '.join(f'{f}={v}' if not isinstance(v, bool) else f'{f}' for f,v in config.elements.items())
+        values_str = ', '.join(f'{k}={v}' for k,v in values.items())
+        results.append(f'Config. {i}: {config_str} | {values_str}')
+    return results
 
 def start_configurator():
     global configurator

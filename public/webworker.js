@@ -31,8 +31,17 @@ self.onmessage = async (event) => {
       results = await self.flamapy.getfeatureTree();
     } else if (action === "getFeatures") {
       results = await self.flamapy.getFeatures();
+    } else if (action === "getNumericalAttributes") {
+      results = await self.flamapy.getNumericalAttributes();
+      // 2. 🟢 PASO CLAVE: Convertir el objeto complejo a una cadena JSON
+      const json_string = JSON.stringify(results);
+      // 3. 🟢 PASO CLAVE: Convertir la cadena JSON a un objeto simple de JavaScript
+      const clean_js_object = JSON.parse(json_string);
+      results = clean_js_object;
     } else if (action === "executeActionWithConf") {
       results = await self.flamapy.executeActionWithConf(data);
+    } else if (action === "executeAttributeOptimization") {
+      results = await self.flamapy.executeAttributeOptimization(data);
     } else if (action === "startConfigurator") {
       results = await self.flamapy.startConfigurator();
     } else if (action === "answerQuestion") {

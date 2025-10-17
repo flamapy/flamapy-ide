@@ -28,7 +28,10 @@ function EditorPage({ selectedFile }) {
   const [featureTree, setFeatureTree] = useState(null);
   const [currentView, setCurrentView] = useState("source");
   const [constraints, setConstraints] = useState(null);
-  const [history, setHistory] = useState(null)
+  const [history, setHistory] = useState(null);
+  const [isAttributeOptimizationModalOpen, setIsAttributeOptimizationModalOpen] = useState(false);
+  const [numericalAttributes, setNumericalAttributes] = useState(null);
+  const [optimizationGoals, setOptimizationGoals] = useState({});
 
   const editorRef = useRef(null);
 
@@ -54,6 +57,15 @@ function EditorPage({ selectedFile }) {
     { label: "Homogeneity", value: "BDDHomogeneity" },
     { label: "Variability", value: "BDDVariability" },
     { label: "Variant Features", value: "BDDVariantFeatures" },
+  ];
+  const Z3Operations = [
+    { label: "Satisfiable", value: "Z3Satisfiable" },
+    { label: "Configurations", value: "Z3Configurations" },
+    { label: "Number of configurations", value: "Z3ConfigurationsNumber" },
+    { label: "Core features", value: "Z3CoreFeatures" },
+    { label: "Dead features", value: "Z3DeadFeatures" },
+    { label: "False-optional features", value: "Z3FalseOptionalFeatures" },
+    { label: "Attribute optimization", value: "Z3AttributeOptimization" },
   ];
 
   const exportOperations = [
@@ -191,6 +203,30 @@ function EditorPage({ selectedFile }) {
     }
   }
 
+  // 🟢 FUNCIÓN NUEVA: Para obtener atributos numéricos del worker
+  async function get_attributes() {
+    if (!isLoaded) return null; // Asegura que el worker esté listo
+
+    return new Promise((resolve, reject) => {
+      // 1. Envía la acción al worker
+      worker.postMessage({ action: "getNumericalAttributes" });
+      
+      // 2. Define el manejador para la respuesta
+      worker.onmessage = (event) => {
+        if (event.data.results !== undefined) {
+          // Asumiendo que 'results' contiene la lista de atributos
+          resolve(event.data.results); 
+        } else if (event.data.error) {
+          setOutput({
+            label: "Attribute Extraction Error",
+            result: `Error getting numerical attributes: ${event.data.error}`,
+          });
+          reject(new Error("Worker error during attribute extraction"));
+        }
+      };
+    });
+  }
+
   async function validateModel() {
     if (isLoaded) {
       const code = editorRef.current.getValue();
@@ -218,6 +254,12 @@ function EditorPage({ selectedFile }) {
         await validateModel();
       }
       if (validation.valid) {
+        if (action.value === "Z3AttributeOptimization") {
+          const attributes = await get_attributes();
+          setNumericalAttributes(attributes);
+          setIsAttributeOptimizationModalOpen(true);
+          return;
+        }
         worker.postMessage({ action: "executeAction", data: action });
         setIsRunning(true);
         setOutput({ label: action.label, result: "Executing operation" });
@@ -371,6 +413,80 @@ function EditorPage({ selectedFile }) {
     }
   };
 
+  // 🟢 FUNCIÓN NUEVA: Maneja el cambio del checkbox (seleccionar/deseleccionar)
+  function handleAttributeSelection(attribute, isChecked) {
+    setOptimizationGoals(prevGoals => {
+      // Si se selecciona, inicializa el goal a 'Minimize' por defecto
+      if (isChecked) {
+        return {
+          ...prevGoals,
+          [attribute]: { selected: true, goal: prevGoals[attribute]?.goal || 'Minimize' }
+        };
+      } else {
+        // Si se deselecciona, marca como no seleccionado (mantiene el goal anterior por si se vuelve a seleccionar)
+        return {
+          ...prevGoals,
+          [attribute]: { ...prevGoals[attribute], selected: false }
+        };
+      }
+    });
+  }
+
+  // 🟢 FUNCIÓN NUEVA: Maneja el cambio del selector (Minimize/Maximize)
+  function handleGoalChange(attribute, newGoal) {
+    setOptimizationGoals(prevGoals => ({
+      ...prevGoals,
+      [attribute]: { ...prevGoals[attribute], goal: newGoal }
+    }));
+  }
+
+  // 🟢 FUNCIÓN NUEVA: Maneja la acción final (ejecutar la optimización)
+  function executeOptimization() {
+    // 1. Filtra solo los atributos seleccionados
+    const selectedGoals = Object.entries(optimizationGoals)
+      .filter(([, data]) => data.selected)
+      .map(([attribute, data]) => ({ 
+          attribute: attribute, 
+          goal: data.goal 
+      }));
+
+    if (selectedGoals.length === 0) {
+        setOutput({ label: "Optimization Error", result: "No attributes selected for optimization." });
+        return;
+    }
+
+    // 2. Aquí iría la llamada al worker para ejecutar la operación de optimización
+    // Ejemplo: worker.postMessage({ action: "executeOptimization", data: selectedGoals });
+    worker.postMessage({ action: "executeAttributeOptimization", data: selectedGoals });
+        setIsRunning(true);
+        setOutput({ label: 'Attribute Optimization', result: "Executing operation" });
+        worker.onmessage = (event) => {
+          if (event.data.results !== undefined) {
+            setOutput(event.data.results);
+          } else if (event.data.error) {
+            setOutput({
+              label: action.label,
+              result: `An exception has occurred when trying to execute the operation. Please check if the model is well defined.`,
+            });
+          }
+          setIsRunning(false);
+        };
+    
+    // 3. Muestra el resultado de la selección en la consola (temporalmente)
+    setOutput({
+      label: "Optimization Configuration",
+      result: JSON.stringify(selectedGoals, null, 2)
+    });
+    
+    // 4. Cierra el modal
+    closeAttributeOptimizationModal();
+  }
+
+  // 🟢 FUNCIÓN NUEVA: Para cerrar el modal
+  function closeAttributeOptimizationModal() {
+    setIsAttributeOptimizationModalOpen(false);
+  }
+
   return (
     <div className="flex-1 overflow-hidden flex flex-col">
       {/* Top Section */}
@@ -395,6 +511,11 @@ function EditorPage({ selectedFile }) {
             <DropdownMenu
               buttonLabel={"BDD Operations"}
               options={BDDOperations}
+              executeAction={executeAction}
+            ></DropdownMenu>
+            <DropdownMenu
+              buttonLabel={"Z3 Operations"}
+              options={Z3Operations}
               executeAction={executeAction}
             ></DropdownMenu>
             <DropdownMenu
@@ -439,6 +560,81 @@ function EditorPage({ selectedFile }) {
           validation={validation}
         />
       </div>
+
+      {/* 🟢 NUEVO: Implementación del Modal */}
+      {isAttributeOptimizationModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-75">
+          <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full mx-4 p-6">
+            <h3 className="text-xl font-bold mb-4 text-gray-800">Select Optimization Goals</h3> 
+            
+            <div className="max-h-96 overflow-y-auto border border-gray-300 bg-gray-50 p-3 rounded">
+              {numericalAttributes && numericalAttributes.length > 0 ? (
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-100 sticky top-0">
+                    <tr>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Optimize</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Attribute</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Goal</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {numericalAttributes.map((attribute) => {
+                      const isSelected = optimizationGoals[attribute]?.selected || false;
+                      const goal = optimizationGoals[attribute]?.goal || 'Minimize';
+                      
+                      return (
+                        <tr key={attribute}>
+                          <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={(e) => handleAttributeSelection(attribute, e.target.checked)}
+                              className="h-4 w-4 text-blue-600 border-gray-300 rounded"
+                            />
+                          </td>
+                          <td className="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-900">
+                            {attribute}
+                          </td>
+                          <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-500">
+                            <select
+                              value={goal}
+                              disabled={!isSelected} // Deshabilita el selector si no está seleccionado
+                              onChange={(e) => handleGoalChange(attribute, e.target.value)}
+                              className={`mt-1 block w-full py-1 px-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm ${!isSelected ? 'bg-gray-200 text-gray-500' : 'bg-white'}`}
+                            >
+                              <option value="Minimize">Minimize</option>
+                              <option value="Maximize">Maximize</option>
+                            </select>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              ) : (
+                <p className="text-sm text-red-500">
+                  ⚠️ No hay atributos numéricos disponibles o la operación falló.
+                </p>
+              )}
+            </div>
+            
+            <div className="mt-6 flex justify-end space-x-3">
+              <button
+                className="px-4 py-2 bg-gray-300 text-gray-800 font-semibold rounded-md hover:bg-gray-400 transition duration-150"
+                onClick={closeAttributeOptimizationModal}
+              >
+                Cancel
+              </button>
+              <button
+                className="px-4 py-2 bg-green-600 text-white font-semibold rounded-md hover:bg-green-700 transition duration-150"
+                onClick={executeOptimization}
+              >
+                Execute Optimization
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

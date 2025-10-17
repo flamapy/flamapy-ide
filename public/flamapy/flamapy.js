@@ -22,7 +22,9 @@ class Flamapy {
   await micropip.install("flamapy/flamapy_fm-2.1.0.dev0-py3-none-any.whl", deps=False)
   await micropip.install("flamapy/flamapy_sat-2.1.0.dev0-py3-none-any.whl", deps=False)
   await micropip.install("flamapy/flamapy_bdd-2.1.0.dev0-py3-none-any.whl", deps=False)
+  await micropip.install("flamapy/flamapy_z3-2.1.0.dev0-py3-none-any.whl", deps=False)
   await micropip.install("flamapy/dd-0.5.7-py3-none-any.whl", deps=False)
+  await micropip.install("flamapy/z3_solver-4.13.4.0-py3-none-pyodide_2024_0_wasm32.whl", deps=False)
   await micropip.install("flamapy/ply-3.11-py2.py3-none-any.whl", deps=False)
   await micropip.install("flamapy/astutils-0.0.6-py3-none-any.whl", deps=False)
   await micropip.install("flamapy/graphviz-0.20-py3-none-any.whl", deps=False)
@@ -106,6 +108,15 @@ class Flamapy {
     );
     return result;
   }
+  
+  async getNumericalAttributes() {
+    const result = await this.pyodide.runPythonAsync(
+      `
+  get_numerical_attributes()
+        `
+    );
+    return result;
+  }
 
   async executeActionWithConf(data) {
     if (this.isValid) {
@@ -123,6 +134,22 @@ class Flamapy {
       }
     }
   }
+
+    async executeAttributeOptimization(data) {
+      if (this.isValid) {
+
+        const result = await this.pyodide.runPythonAsync(
+          `
+    execute_attribute_optimization(${JSON.stringify(data)})
+            `
+        );
+        if (result.toJs) {
+          return { label: `Optimum Configurations`, result: result.toJs() };
+        } else {
+          return { label: `Optimum Configurations`, result };
+        }
+      }
+    }
 
   async startConfigurator() {
     const result = await this.pyodide.runPythonAsync(`
