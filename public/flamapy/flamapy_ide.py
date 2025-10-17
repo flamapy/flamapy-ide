@@ -252,6 +252,8 @@ def execute_configurator_operation(name: str, conf):
     return result
 
 def execute_attribute_optimization(attributes_goals):
+    print("Attributes goals received:", attributes_goals)
+
     feature_model = fm.fm_model
     z3_model = FmToZ3(feature_model).transform()
 
@@ -267,9 +269,10 @@ def execute_attribute_optimization(attributes_goals):
     results = []
     for i, config_value in enumerate(configurations_with_values, 1):
         config, values = config_value
-        config_str = ', '.join(f'{f}={v}' if not isinstance(v, bool) else f'{f}' for f,v in config.elements.items())
+        config_str = ', '.join(f'{f}={v}' if not isinstance(v, bool) else f'{f}' for f,v in config.elements.items() if config.is_selected(f))
         values_str = ', '.join(f'{k}={v}' for k,v in values.items())
         results.append(f'Config. {i}: {config_str} | {values_str}')
+    print(results)
     return results
 
 def start_configurator():

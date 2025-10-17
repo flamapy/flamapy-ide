@@ -143,10 +143,13 @@ class Flamapy {
     execute_attribute_optimization(${JSON.stringify(data)})
             `
         );
+        const goals = data
+          .map(item => `${item.goal} ${item.attribute}`)
+          .join(", ");
         if (result.toJs) {
-          return { label: `Optimum Configurations`, result: result.toJs() };
+          return { label: `Optimum Configurations (Goals: ${goals})`, result: result.toJs() };
         } else {
-          return { label: `Optimum Configurations`, result };
+          return { label: `Optimum Configurations (Goals: ${goals})`, result };
         }
       }
     }

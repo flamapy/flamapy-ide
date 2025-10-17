@@ -462,10 +462,12 @@ function EditorPage({ selectedFile }) {
         setOutput({ label: 'Attribute Optimization', result: "Executing operation" });
         worker.onmessage = (event) => {
           if (event.data.results !== undefined) {
+            console.log("Raw result from worker:", event.data.results);
+            //event.data.results.result = JSON.parse(event.data.results.result);
             setOutput(event.data.results);
           } else if (event.data.error) {
             setOutput({
-              label: action.label,
+              label: 'Attribute Optimization',
               result: `An exception has occurred when trying to execute the operation. Please check if the model is well defined.`,
             });
           }
@@ -485,6 +487,8 @@ function EditorPage({ selectedFile }) {
   // 🟢 FUNCIÓN NUEVA: Para cerrar el modal
   function closeAttributeOptimizationModal() {
     setIsAttributeOptimizationModalOpen(false);
+    // Limpia el estado de selección al cerrar el modal.
+    setOptimizationGoals({});
   }
 
   return (
