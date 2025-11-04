@@ -128,9 +128,7 @@ def execute_pysat_operation(name: str):
     elif 'Z3' in name:
         print(f"Executing Z3 operation {name}")
         z3_model = dm.use_transformation_m2m(feature_model, "z3")
-        #z3_model = FmToZ3(feature_model).transform()
         # Get the operation
-        #operation = Z3Satisfiable()
         operation = dm.get_operation(z3_model, name)
         # Execute the operation
         operation.execute(z3_model)
