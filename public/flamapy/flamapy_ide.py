@@ -197,7 +197,7 @@ def feature_tree(node):
     res['attributes']['isNumerical'] = node.is_numerical()
     res['attributes']['isString'] = node.is_string()
     res['attributes']['featureType'] = node.feature_type.value
-    res['attributes']['attributes'] = node.get_attributes()
+    res['attributes']['attributes'] = [str(attribute) for attribute in node.get_attributes()]
 
     if node.get_children():
         res['attributes']['isAlternativeGroup'] = node.is_alternative_group()
