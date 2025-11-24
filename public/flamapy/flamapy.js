@@ -22,7 +22,7 @@ class Flamapy {
   await micropip.install("flamapy/flamapy_fm-2.1.0.dev0-py3-none-any.whl", deps=False)
   await micropip.install("flamapy/flamapy_sat-2.1.0.dev0-py3-none-any.whl", deps=False)
   await micropip.install("flamapy/flamapy_bdd-2.1.0.dev0-py3-none-any.whl", deps=False)
-  await micropip.install("flamapy/flamapy_z3-2.1.0.dev0-py3-none-any.whl", deps=False)
+  await micropip.install("flamapy/flamapy_z3-2.1.0.dev1-py3-none-any.whl", deps=False)
   await micropip.install("flamapy/dd-0.5.7-py3-none-any.whl", deps=False)
   await micropip.install("flamapy/z3_solver-4.13.4.0-py3-none-pyodide_2024_0_wasm32.whl", deps=False)
   await micropip.install("flamapy/ply-3.11-py2.py3-none-any.whl", deps=False)
