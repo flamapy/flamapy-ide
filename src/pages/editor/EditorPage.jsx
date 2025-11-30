@@ -1,6 +1,6 @@
 /* eslint-disable react/prop-types */
 import { useEffect, useState, useRef } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import "react-resizable/css/styles.css";
 import ModelInformation from "../../components/ModelInformation";
 import ExecutionOutput from "../../components/ExecutionOutput";
@@ -15,15 +15,17 @@ import JSZip from "jszip";
 
 function EditorPage({ selectedFile }) {
   const location = useLocation();
+  const navigate = useNavigate();
   const searchParams = new URLSearchParams(location.search);
   const docIdFromQuery = searchParams.get("doc");
-  const collabEnabled =
-    import.meta.env.VITE_ENABLE_COLLAB === "true" && !!docIdFromQuery;
+  const collabFeatureAvailable = import.meta.env.VITE_ENABLE_COLLAB === "true";
+  const collabEnabled = collabFeatureAvailable && !!docIdFromQuery;
+  const collabEndpoint = import.meta.env.VITE_COLLAB_URL || "ws://localhost:1234";
   const collabConfig = collabEnabled
     ? {
         enabled: true,
         docId: docIdFromQuery,
-        endpoint: import.meta.env.VITE_COLLAB_URL || "ws://localhost:1234",
+        endpoint: collabEndpoint,
       }
     : { enabled: false };
 
@@ -39,6 +41,9 @@ function EditorPage({ selectedFile }) {
       ? `Importing model '${selectedFile.name}'`
       : "FlamapyIDE is starting",
   });
+  const [copyMessage, setCopyMessage] = useState("");
+  const [collabStatus, setCollabStatus] = useState("");
+  const [initialContent, setInitialContent] = useState("");
   const [featureTree, setFeatureTree] = useState(null);
   const [currentView, setCurrentView] = useState("source");
   const [constraints, setConstraints] = useState(null);
@@ -141,6 +146,7 @@ function EditorPage({ selectedFile }) {
       );
       reader.onload = (e) => {
         const fileContent = e.target.result;
+        setInitialContent(fileContent);
         if (fileExtension === "uvl") {
           editorRef.current.setValue(fileContent);
           editorRef.current.layout();
@@ -154,6 +160,7 @@ function EditorPage({ selectedFile }) {
           worker.onmessage = async (event) => {
             if (event.data.results !== undefined) {
               editorRef.current.setValue(event.data.results);
+              setInitialContent(event.data.results);
               await editorRef.current.layout();
               setIsImported(true);
             } else if (event.data.error) {
@@ -244,6 +251,7 @@ function EditorPage({ selectedFile }) {
   async function validateModel() {
     if (isLoaded) {
       const code = editorRef.current.getValue();
+      setInitialContent(code);
       worker.postMessage({ action: "validateModel", data: code });
 
       worker.onmessage = (event) => {
@@ -402,6 +410,62 @@ function EditorPage({ selectedFile }) {
     }
   }
 
+  async function handleCopySessionLink() {
+    if (!collabEnabled || !docIdFromQuery) return;
+    const url = new URL(window.location.href);
+    url.searchParams.set("doc", docIdFromQuery);
+
+    try {
+      await navigator.clipboard.writeText(url.toString());
+      setCopyMessage("Session link copied");
+    } catch (err) {
+      setCopyMessage("Unable to copy link");
+      console.error("Clipboard error", err);
+    }
+
+    setTimeout(() => setCopyMessage(""), 2000);
+  }
+
+  const generateDocId = () => {
+    if (crypto?.randomUUID) return crypto.randomUUID();
+    return `doc-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+  };
+
+  async function checkCollabHealth() {
+    try {
+      const wsUrl = new URL(collabEndpoint);
+      const healthUrl = new URL(wsUrl);
+      healthUrl.protocol = wsUrl.protocol === "wss:" ? "https:" : "http:";
+      healthUrl.pathname = "/health";
+      const res = await fetch(healthUrl.toString(), { mode: "cors" });
+      return res.ok;
+    } catch (err) {
+      console.error("Health check failed", err);
+      return false;
+    }
+  }
+
+  async function handleStartCollab() {
+    if (!collabFeatureAvailable) {
+      setCollabStatus("Activa VITE_ENABLE_COLLAB=true para usar colaboración.");
+      return;
+    }
+
+    setCollabStatus("Comprobando backend…");
+    const healthy = await checkCollabHealth();
+    if (!healthy) {
+      setCollabStatus("Backend colaborativo no responde.");
+      return;
+    }
+
+    setInitialContent(editorRef.current?.getValue() || initialContent || "");
+    const newDocId = generateDocId();
+    const nextSearch = new URLSearchParams(location.search);
+    nextSearch.set("doc", newDocId);
+    navigate({ pathname: location.pathname, search: nextSearch.toString() });
+    setCollabStatus("Sesión creada. Puedes copiar el enlace.");
+  }
+
   const toggleView = async (option) => {
     if (isLoaded) {
       if (validation == null) {
@@ -547,12 +611,38 @@ function EditorPage({ selectedFile }) {
               executeAction={toggleView}
               className="bg-blue-500 text-white p-2 rounded"
             />
+            {collabEnabled && (
+              <div className="ml-4 flex items-center gap-2">
+                <button
+                  className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-3 py-1 rounded"
+                  onClick={handleCopySessionLink}
+                >
+                  Copy session link
+                </button>
+                {copyMessage && (
+                  <span className="text-xs text-gray-600">{copyMessage}</span>
+                )}
+              </div>
+            )}
+            {!collabEnabled && collabFeatureAvailable && (
+              <div className="ml-4 flex items-center gap-2">
+                <button
+                  className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-3 py-1 rounded"
+                  onClick={handleStartCollab}
+                >
+                  Iniciar colaboración
+                </button>
+                {collabStatus && (
+                  <span className="text-xs text-gray-600">{collabStatus}</span>
+                )}
+              </div>
+            )}
           </Toolbar>
           {/* Text Editor or feature model */}
           <UVLEditor
             editorRef={editorRef}
             validateModel={validateModel}
-            defaultCode={editorRef?.current?.getValue() || ""}
+            defaultCode={initialContent}
             hide={currentView !== "source"}
             collabConfig={collabConfig}
           />

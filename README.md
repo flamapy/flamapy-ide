@@ -108,7 +108,16 @@ pytest –cov=public tests/
 
 ## Experimental real-time collaboration
 
-1. Install JS deps if you haven't recently: `npm install`.
-2. Start the collaboration backend (in another terminal): `npm run collab:server` (set `COLLAB_PORT` and `COLLAB_HOST` as needed; defaults to `127.0.0.1:1234`).
-3. Start the UI with collaboration enabled: `VITE_ENABLE_COLLAB=true VITE_COLLAB_URL=ws://localhost:1234 npm run dev`.
-4. Share a doc by URL: open `http://localhost:5173/editor?doc=my-session-id` in two browsers/tabs to co-edit the same UVL document. Pyodide-based analysis still runs locally on each user and is triggered the same way as before.
+Prereqs: `npm install`.
+
+Backend:
+- Start the collab server: `npm run collab:server` (override host/port via `COLLAB_HOST`/`COLLAB_PORT`, defaults `127.0.0.1:1234`). `/health` returns 200 if reachable.
+
+Frontend:
+- Run with collab enabled: `VITE_ENABLE_COLLAB=true VITE_COLLAB_URL=ws://localhost:1234 npm run dev`.
+- Open the editor without `?doc=`. Use the “Iniciar colaboración” button in the toolbar; it checks the backend, seeds the shared doc with your current text, and updates the URL with `?doc=<id>`.
+- Click “Copy session link” to share. Open that link in another tab/browser; edits should sync immediately. (If you prefer, you can still manually craft a URL `http://localhost:5173/editor?doc=my-session-id`.)
+
+Notes:
+- Collaboration is optional and feature-flagged (`VITE_ENABLE_COLLAB`). Without it, the app behaves as before.
+- The shared document content stays in memory on the collab server; Pyodide analysis still runs locally in each tab and is triggered manually by the user.
