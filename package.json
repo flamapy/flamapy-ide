@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "collab:server": "node server/collab-server.js"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.6.0",
@@ -18,7 +19,11 @@
     "react-d3-tree": "^3.6.2",
     "react-dom": "^18.3.1",
     "react-resizable": "^3.0.5",
-    "react-router-dom": "^6.25.1"
+    "react-router-dom": "^6.25.1",
+    "ws": "^8.18.0",
+    "y-monaco": "^0.1.5",
+    "y-websocket": "^1.5.4",
+    "yjs": "^13.6.18"
   },
   "devDependencies": {
     "@types/react": "^18.3.3",

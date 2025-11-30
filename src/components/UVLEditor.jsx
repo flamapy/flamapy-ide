@@ -1,8 +1,27 @@
 /* eslint-disable react/prop-types */
 
+import { useEffect, useRef } from "react";
 import { Editor } from "@monaco-editor/react";
+import * as Y from "yjs";
+import { WebsocketProvider } from "y-websocket";
+import { MonacoBinding } from "y-monaco";
 
-function UVLEditor({ editorRef, validateModel, defaultCode = "", hide }) {
+function UVLEditor({
+  editorRef,
+  validateModel,
+  defaultCode = "",
+  hide,
+  collabConfig,
+}) {
+  const collabRefs = useRef({ provider: null, ydoc: null });
+
+  useEffect(() => {
+    return () => {
+      collabRefs.current?.provider?.destroy();
+      collabRefs.current?.ydoc?.destroy();
+    };
+  }, []);
+
   function handleEditorDidMount(editor, monaco) {
     editorRef.current = editor;
     monaco.languages.register({ id: "uvl" });
@@ -113,6 +132,34 @@ function UVLEditor({ editorRef, validateModel, defaultCode = "", hide }) {
         { open: '"', close: '"' },
       ],
     });
+    if (collabConfig?.enabled) {
+      const ydoc = new Y.Doc();
+      const provider = new WebsocketProvider(
+        collabConfig.endpoint,
+        collabConfig.docId,
+        ydoc
+      );
+      const yText = ydoc.getText("uvl");
+
+      if (yText.length === 0 && defaultCode) {
+        yText.insert(0, defaultCode);
+      }
+
+      new MonacoBinding(
+        yText,
+        editor.getModel(),
+        new Set([editor]),
+        provider.awareness
+      );
+
+      provider.awareness.setLocalStateField("user", {
+        name: collabConfig.userName || "anonymous",
+      });
+
+      collabRefs.current = { provider, ydoc };
+    } else if (defaultCode) {
+      editor.setValue(defaultCode);
+    }
   }
 
   return (
@@ -120,7 +167,7 @@ function UVLEditor({ editorRef, validateModel, defaultCode = "", hide }) {
       <div className="grid grid-cols-1 grid-rows-1 h-full w-full rounded-lg">
         <Editor
           defaultLanguage="uvl"
-          value={defaultCode}
+          defaultValue={collabConfig?.enabled ? "" : defaultCode}
           onMount={handleEditorDidMount}
           onChange={validateModel}
           options={{

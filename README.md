@@ -77,7 +77,7 @@ Ensure you have Docker installed on your machine. You can install it from [Docke
 
 ```bash
 docker run -p 80:80 flamapy-ide:prod
-```
+   ```
 
 This starts the app on port 80 using Nginx. You can access the app at http://localhost.
 
@@ -105,3 +105,10 @@ After that, you can run the tests with coverae with the following command
 ```bash
 pytest –cov=public tests/
 ```
+
+## Experimental real-time collaboration
+
+1. Install JS deps if you haven't recently: `npm install`.
+2. Start the collaboration backend (in another terminal): `npm run collab:server` (set `COLLAB_PORT` and `COLLAB_HOST` as needed; defaults to `127.0.0.1:1234`).
+3. Start the UI with collaboration enabled: `VITE_ENABLE_COLLAB=true VITE_COLLAB_URL=ws://localhost:1234 npm run dev`.
+4. Share a doc by URL: open `http://localhost:5173/editor?doc=my-session-id` in two browsers/tabs to co-edit the same UVL document. Pyodide-based analysis still runs locally on each user and is triggered the same way as before.

@@ -1,5 +1,6 @@
 /* eslint-disable react/prop-types */
 import { useEffect, useState, useRef } from "react";
+import { useLocation } from "react-router-dom";
 import "react-resizable/css/styles.css";
 import ModelInformation from "../../components/ModelInformation";
 import ExecutionOutput from "../../components/ExecutionOutput";
@@ -13,6 +14,19 @@ import Wizzard from "../../components/Wizzard";
 import JSZip from "jszip";
 
 function EditorPage({ selectedFile }) {
+  const location = useLocation();
+  const searchParams = new URLSearchParams(location.search);
+  const docIdFromQuery = searchParams.get("doc");
+  const collabEnabled =
+    import.meta.env.VITE_ENABLE_COLLAB === "true" && !!docIdFromQuery;
+  const collabConfig = collabEnabled
+    ? {
+        enabled: true,
+        docId: docIdFromQuery,
+        endpoint: import.meta.env.VITE_COLLAB_URL || "ws://localhost:1234",
+      }
+    : { enabled: false };
+
   const [worker, setWorker] = useState(null);
   const [isLoaded, setIsLoaded] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
@@ -538,8 +552,9 @@ function EditorPage({ selectedFile }) {
           <UVLEditor
             editorRef={editorRef}
             validateModel={validateModel}
-            defaultCode={editorRef?.current?.getValue()}
+            defaultCode={editorRef?.current?.getValue() || ""}
             hide={currentView !== "source"}
+            collabConfig={collabConfig}
           />
           {currentView === "graph" && (
             <FeatureModelVisualization
