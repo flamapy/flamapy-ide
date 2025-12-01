@@ -6,7 +6,7 @@ const ModelInformation = ({
   width = 300,
   minWidth = 150,
   maxWidth = 400,
-  buttonText = "Validate model",
+  buttonText = "Syntax Validation",
   onValidateModel,
   validation,
 }) => {

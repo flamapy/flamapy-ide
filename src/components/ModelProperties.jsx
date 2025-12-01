@@ -5,7 +5,7 @@ const ModelProperties = ({ modelProperties }) => {
   return (
     <div className="p-4 bg-white rounded shadow-lg mt-2">
       <div className="w-full bg-green-600 text-white text-center py-3 px-4 rounded-md mb-4">
-        The model is valid
+        The model is syntactically valid
       </div>
 
       <h2 className="text-[#0D486C] font-bold text-2xl mb-4">

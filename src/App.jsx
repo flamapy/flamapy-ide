@@ -9,11 +9,12 @@ import HowToCiteUs from "./pages/HowToCiteUs";
 
 function App() {
   const [selectedFile, setSelectedFile] = useState(null);
+  const [navControls, setNavControls] = useState(null);
 
   return (
     <BrowserRouter>
       <div className="h-screen w-screen flex flex-col">
-        <Navbar>
+        <Navbar controls={navControls}>
           <Link
             to="/how-to-cite-us"
             className="text-m font-medium text-gray-600 hover:text-blue-600 transition-colors duration-200"
@@ -35,7 +36,7 @@ function App() {
           ></Route>
           <Route
             path="/editor"
-            element={<EditorPage selectedFile={selectedFile} />}
+            element={<EditorPage selectedFile={selectedFile} setNavControls={setNavControls} />}
           ></Route>
           <Route
             path="/how-to-cite-us"

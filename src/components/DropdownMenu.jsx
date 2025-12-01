@@ -9,8 +9,17 @@ const DropdownMenu = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
+  const [menuStyle, setMenuStyle] = useState(null);
 
   const handleToggle = () => {
+    if (!isOpen && dropdownRef.current) {
+      const rect = dropdownRef.current.getBoundingClientRect();
+      setMenuStyle({
+        top: rect.bottom + window.scrollY + 6,
+        left: rect.left + window.scrollX,
+        width: rect.width,
+      });
+    }
     setIsOpen((prev) => !prev);
   };
 
@@ -34,7 +43,7 @@ const DropdownMenu = ({
   }, []);
 
   return (
-    <div ref={dropdownRef} className="relative inline-block w-max">
+    <div ref={dropdownRef} className="relative inline-block w-max z-50">
       <button
         onClick={handleToggle}
         className={className}
@@ -47,21 +56,41 @@ const DropdownMenu = ({
 
       {isOpen && (
         <div
-          className="absolute w-full mt-1 bg-white border border-[#356C99] rounded-lg shadow-lg z-10"
+          className="fixed bg-white border border-[#356C99] rounded-lg shadow-lg z-50"
+          style={{
+            top: menuStyle?.top ?? 0,
+            left: menuStyle?.left ?? 0,
+            width: menuStyle?.width ?? "auto",
+          }}
           role="menu"
         >
           {options?.length ? (
-            options.map((option) => (
-              <div
-                key={option.label}
-                onClick={() => handleAction(option)}
-                tabIndex={0}
-                className="w-full text-left py-2 px-4 cursor-pointer hover:bg-[#0D486C] text-[#356C99] hover:text-white focus:outline-none focus:bg-[#0D486C] focus:text-white"
-                role="menuitem"
-              >
-                {option.label}
-              </div>
-            ))
+            options.map((option) => {
+              if (option.type === "section") {
+                return (
+                  <div
+                    key={option.label}
+                    className="px-4 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wide"
+                  >
+                    {option.label}
+                  </div>
+                );
+              }
+              if (option.type === "divider") {
+                return <div key={option.label} className="border-t border-gray-200 my-1" />;
+              }
+              return (
+                <div
+                  key={option.label}
+                  onClick={() => handleAction(option)}
+                  tabIndex={0}
+                  className="w-full text-left py-2 px-4 cursor-pointer hover:bg-[#0D486C] text-[#356C99] hover:text-white focus:outline-none focus:bg-[#0D486C] focus:text-white"
+                  role="menuitem"
+                >
+                  {option.label}
+                </div>
+              );
+            })
           ) : (
             <div className="py-2 px-4 text-gray-500">No options available</div>
           )}

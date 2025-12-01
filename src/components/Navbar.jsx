@@ -1,10 +1,10 @@
 /* eslint-disable react/prop-types */
 import { Link } from "react-router-dom";
 
-function Navbar({ children }) {
+function Navbar({ children, controls }) {
   return (
-    <nav className="flex justify-between items-center py-4 px-6 bg-white shadow">
-      <div className="flex gap-4 items-center">
+    <nav className="relative z-20 flex items-center py-4 px-6 bg-white shadow gap-4">
+      <div className="flex items-center gap-3 shrink-0">
         <Link
           to="/"
           className="flex flex-rowtext-blue-950 text-xl font-semibold"
@@ -17,7 +17,14 @@ function Navbar({ children }) {
           IDE
         </Link>
       </div>
-      <div className="flex gap-4 items-center">{children}</div>
+      <div className="flex-1 flex justify-center overflow-visible">
+        {controls && (
+          <div className="relative flex items-end gap-2 whitespace-nowrap overflow-visible">
+            {controls}
+          </div>
+        )}
+      </div>
+      <div className="flex gap-4 items-center shrink-0">{children}</div>
     </nav>
   );
 }

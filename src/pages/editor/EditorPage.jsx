@@ -1,11 +1,10 @@
 /* eslint-disable react/prop-types */
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import "react-resizable/css/styles.css";
 import ModelInformation from "../../components/ModelInformation";
 import ExecutionOutput from "../../components/ExecutionOutput";
 import UVLEditor from "../../components/UVLEditor";
-import Toolbar from "../../components/Toolbar";
 import DropdownMenu from "../../components/DropdownMenu";
 import { saveAs } from "file-saver";
 import TreeView from "../../components/FeatureTree";
@@ -13,7 +12,7 @@ import FeatureModelVisualization from "../../components/FeatureModelVisualizatio
 import Wizzard from "../../components/Wizzard";
 import JSZip from "jszip";
 
-function EditorPage({ selectedFile }) {
+function EditorPage({ selectedFile, setNavControls }) {
   const location = useLocation();
   const navigate = useNavigate();
   const searchParams = new URLSearchParams(location.search);
@@ -51,41 +50,38 @@ function EditorPage({ selectedFile }) {
   const [isAttributeOptimizationModalOpen, setIsAttributeOptimizationModalOpen] = useState(false);
   const [numericalAttributes, setNumericalAttributes] = useState(null);
   const [optimizationGoals, setOptimizationGoals] = useState({});
-
-  const editorRef = useRef(null);
-
-  const SATOperations = [
-    { label: "Configurations", value: "PySATConfigurations" },
-    { label: "Number of configurations", value: "PySATConfigurationsNumber" },
-    { label: "Dead features", value: "PySATDeadFeatures" },
-    { label: "Diagnosis", value: "PySATDiagnosis" },
-    { label: "False optional features", value: "PySATFalseOptionalFeatures" },
-    { label: "Satisfiable", value: "PySATSatisfiable" },
-  ];
-  const BDDOperations = [
-    { label: "Configurations", value: "BDDConfigurations" },
-    { label: "Number of configurations", value: "BDDConfigurationsNumber" },
-    { label: "Dead features", value: "BDDDeadFeatures" },
-    { label: "Satisfiable", value: "BDDSatisfiable" },
-    { label: "Configuration distribution", value: "BDDProductDistribution" },
-    {
-      label: "Feature Inclusion Probability",
-      value: "BDDFeatureInclusionProbability",
-    },
-    { label: "Unique Features", value: "BDDUniqueFeatures" },
-    { label: "Homogeneity", value: "BDDHomogeneity" },
-    { label: "Variability", value: "BDDVariability" },
-    { label: "Variant Features", value: "BDDVariantFeatures" },
-  ];
-  const Z3Operations = [
-    { label: "Satisfiable", value: "Z3Satisfiable" },
-    { label: "Configurations", value: "Z3Configurations" },
-    { label: "Number of configurations", value: "Z3ConfigurationsNumber" },
-    { label: "Core features", value: "Z3CoreFeatures" },
-    { label: "Dead features", value: "Z3DeadFeatures" },
-    { label: "False-optional features", value: "Z3FalseOptionalFeatures" },
-    { label: "Attribute optimization", value: "Z3AttributeOptimization" },
-  ];
+  const [showConfiguratorPanel, setShowConfiguratorPanel] = useState(true);
+  const solverOperations = {
+    sat: [
+      { label: "Configurations", value: "PySATConfigurations" },
+      { label: "Number of configurations", value: "PySATConfigurationsNumber" },
+      { label: "Dead features", value: "PySATDeadFeatures" },
+      { label: "Diagnosis", value: "PySATDiagnosis" },
+      { label: "False optional features", value: "PySATFalseOptionalFeatures" },
+      { label: "Satisfiable", value: "PySATSatisfiable" },
+    ],
+    bdd: [
+      { label: "Configurations", value: "BDDConfigurations" },
+      { label: "Number of configurations", value: "BDDConfigurationsNumber" },
+      { label: "Dead features", value: "BDDDeadFeatures" },
+      { label: "Satisfiable", value: "BDDSatisfiable" },
+      { label: "Configuration distribution", value: "BDDProductDistribution" },
+      { label: "Feature inclusion probability", value: "BDDFeatureInclusionProbability" },
+      { label: "Unique features", value: "BDDUniqueFeatures" },
+      { label: "Homogeneity", value: "BDDHomogeneity" },
+      { label: "Variability", value: "BDDVariability" },
+      { label: "Variant features", value: "BDDVariantFeatures" },
+    ],
+    z3: [
+      { label: "Satisfiable", value: "Z3Satisfiable" },
+      { label: "Configurations", value: "Z3Configurations" },
+      { label: "Number of configurations", value: "Z3ConfigurationsNumber" },
+      { label: "Core features", value: "Z3CoreFeatures" },
+      { label: "Dead features", value: "Z3DeadFeatures" },
+      { label: "False-optional features", value: "Z3FalseOptionalFeatures" },
+      { label: "Attribute optimization", value: "Z3AttributeOptimization" },
+    ],
+  };
 
   const exportOperations = [
     { label: "AFM", value: "afm" },
@@ -96,9 +92,148 @@ function EditorPage({ selectedFile }) {
   ];
 
   const viewOptions = [
-    { label: "Source View", value: "source" },
-    { label: "Graph View", value: "graph" },
+    { label: "Source", value: "source" },
+    { label: "Graph", value: "graph" },
+    { label: "Configurator", value: "configurator" },
   ];
+  const solverOptions = [
+    { label: "SAT", value: "sat" },
+    { label: "BDD", value: "bdd" },
+    { label: "Z3", value: "z3" },
+  ];
+  const [selectedSolver, setSelectedSolver] = useState("sat");
+  const editorRef = useRef(null);
+  useEffect(() => {
+    if (currentView === "configurator") {
+      setShowConfiguratorPanel(true);
+    }
+  }, [currentView]);
+  const toolbarContent = useMemo(() => {
+    return (
+      <div className="w-full flex justify-center">
+        <div className="flex items-end gap-3 flex-nowrap overflow-x-auto overflow-visible px-3 py-1 bg-white/80 rounded shadow-sm">
+          <div className="flex flex-col gap-1 whitespace-nowrap">
+            <span className="text-[11px] text-gray-600 text-center w-full">View</span>
+            <div className="h-px bg-gray-300 w-full" />
+            <div className="flex rounded overflow-hidden border border-gray-300">
+              {viewOptions.map((option) => (
+                <button
+                  key={option.value}
+                  className={`px-2.5 py-2 text-sm ${
+                    currentView === option.value
+                      ? "bg-[#356C99] text-white"
+                      : "bg-white text-gray-700"
+                  }`}
+                  onClick={() => toggleView(option)}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-1 whitespace-nowrap">
+            <span className="text-[11px] text-gray-600 text-center w-full">Automated analysis</span>
+            <div className="h-px bg-gray-300 w-full" />
+            <div className="flex items-end gap-1">
+              <div className="flex rounded overflow-hidden border border-gray-300">
+                {solverOptions.map((option) => (
+                  <button
+                    key={option.value}
+                    className={`px-2.5 py-2 text-sm min-w-[110px] ${
+                      selectedSolver === option.value
+                        ? "bg-[#356C99] text-white"
+                        : "bg-white text-gray-700"
+                    }`}
+                    onClick={() => setSelectedSolver(option.value)}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+              <div className="flex rounded overflow-hidden border border-gray-300">
+                <DropdownMenu
+                  buttonLabel={"Analysis operation"}
+                  options={solverOperations[selectedSolver]}
+                  executeAction={executeAction}
+                  className="bg-white text-gray-700 py-2 px-3 rounded-none shadow-none w-[170px] justify-between"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-1 whitespace-nowrap">
+            <span className="text-[11px] text-gray-600 text-center w-full">Export</span>
+            <div className="h-px bg-gray-300 w-full" />
+            <div className="flex rounded overflow-hidden border border-gray-300">
+              <DropdownMenu
+                buttonLabel={"Export"}
+                options={exportOperations}
+                executeAction={downloadFile}
+                className="bg-white text-gray-700 py-2 px-3 rounded-none shadow-none w-[150px] justify-between"
+              />
+            </div>
+          </div>
+
+          {collabEnabled && (
+            <div className="flex flex-col gap-1 whitespace-nowrap">
+              <span className="text-[11px] text-gray-600 text-center w-full">Collaborate</span>
+              <div className="h-px bg-gray-300 w-full" />
+              <div className="flex items-end gap-1">
+                <div className="flex rounded overflow-hidden border border-gray-300">
+                  <button
+                    className="px-2.5 py-2 text-sm bg-white text-gray-700 hover:bg-gray-100"
+                    onClick={handleCopySessionLink}
+                  >
+                    Copy link
+                  </button>
+                </div>
+                {copyMessage && (
+                  <span className="text-xs text-gray-600">{copyMessage}</span>
+                )}
+              </div>
+            </div>
+          )}
+          {!collabEnabled && collabFeatureAvailable && (
+            <div className="flex flex-col gap-1 whitespace-nowrap">
+              <span className="text-[11px] text-gray-600 text-center w-full">Collaborate</span>
+              <div className="h-px bg-gray-300 w-full" />
+              <div className="flex items-end gap-1">
+                <div className="flex rounded overflow-hidden border border-gray-300">
+                  <button
+                    className="px-2.5 py-2 text-sm bg-white text-gray-700 hover:bg-gray-100"
+                    onClick={handleStartCollab}
+                  >
+                    Collaborate
+                  </button>
+                </div>
+                {collabStatus && (
+                  <span className="text-xs text-gray-600">{collabStatus}</span>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }, [
+    collabEnabled,
+    collabFeatureAvailable,
+    collabStatus,
+    copyMessage,
+    currentView,
+    downloadFile,
+    executeAction,
+    handleCopySessionLink,
+    handleStartCollab,
+    selectedSolver,
+    solverOperations,
+    solverOptions,
+    toggleView,
+    validateModel,
+    viewOptions,
+  ]);
+
 
   function initializeWorker() {
     const flamapyWorker = new Worker("/webworker.js");
@@ -447,14 +582,21 @@ function EditorPage({ selectedFile }) {
 
   async function handleStartCollab() {
     if (!collabFeatureAvailable) {
-      setCollabStatus("Activa VITE_ENABLE_COLLAB=true para usar colaboración.");
+      setCollabStatus("Enable VITE_ENABLE_COLLAB=true to use collaboration.");
       return;
     }
 
-    setCollabStatus("Comprobando backend…");
+    const warning =
+      "This feature relies on a backend server. Your file will no longer be sandboxed to this machine, so consider privacy implications before proceeding. Continue?";
+    if (typeof window !== "undefined" && !window.confirm(warning)) {
+      setCollabStatus("");
+      return;
+    }
+
+    setCollabStatus("Checking collaboration backend…");
     const healthy = await checkCollabHealth();
     if (!healthy) {
-      setCollabStatus("Backend colaborativo no responde.");
+      setCollabStatus("Collaboration backend is not responding.");
       return;
     }
 
@@ -466,12 +608,15 @@ function EditorPage({ selectedFile }) {
     setCollabStatus("Sesión creada. Puedes copiar el enlace.");
   }
 
-  const toggleView = async (option) => {
+  async function toggleView(option) {
     if (isLoaded) {
       if (validation == null) {
         await validateModel();
       }
       if (validation?.valid) {
+        if (option.value === "configurator") {
+          setShowConfiguratorPanel(true);
+        }
         setCurrentView(option.value);
       } else {
         if (option.value === "graph") {
@@ -489,7 +634,7 @@ function EditorPage({ selectedFile }) {
         }
       }
     }
-  };
+  }
 
   // 🟢 FUNCIÓN NUEVA: Maneja el cambio del checkbox (seleccionar/deseleccionar)
   function handleAttributeSelection(attribute, isChecked) {
@@ -569,75 +714,47 @@ function EditorPage({ selectedFile }) {
     setOptimizationGoals({});
   }
 
+  useEffect(() => {
+    if (setNavControls) {
+      setNavControls(toolbarContent);
+      return () => setNavControls(null);
+    }
+  }, [setNavControls, toolbarContent]);
+
   return (
     <div className="flex-1 overflow-hidden flex flex-col">
       {/* Top Section */}
 
-      <div className="flex flex-row flex-grow p-2 gap-2 overflow-auto">
+      <div className="flex flex-row flex-grow p-2 gap-2 overflow-hidden relative items-stretch">
         {/* Left Side Panel */}
-        <TreeView
-          treeData={featureTree}
-          executeAction={executeActionWithConf}
-          history={history}
-        />
+        {showConfiguratorPanel && (
+          <div className="relative h-full">
+            <TreeView
+              treeData={featureTree}
+              executeAction={executeActionWithConf}
+              history={history}
+            />
+            {currentView !== "configurator" && (
+              <button
+                className="absolute right-[-12px] top-1/2 -translate-y-1/2 bg-gray-300 text-gray-700 text-[10px] px-1 py-10 rounded-r shadow hover:bg-gray-400 rotate-180 [writing-mode:vertical-rl]"
+                onClick={() => setShowConfiguratorPanel(false)}
+              >
+                Hide configuration panel
+              </button>
+            )}
+          </div>
+        )}
+        {!showConfiguratorPanel && currentView !== "configurator" && (
+          <button
+            className="absolute left-0 top-1/2 -translate-y-1/2 bg-gray-300 text-gray-700 text-[10px] px-1 py-10 rounded-r shadow hover:bg-gray-400 z-40 rotate-180 [writing-mode:vertical-rl]"
+            onClick={() => setShowConfiguratorPanel(true)}
+          >
+            Show configuration panel
+          </button>
+        )}
 
         {/* Center Section (Text Editor/Feature Model + Bottom Panel) */}
         <div className="flex flex-1 flex-col">
-          {/* Toolbar */}
-          <Toolbar>
-            <DropdownMenu
-              buttonLabel={"SAT Operations"}
-              options={SATOperations}
-              executeAction={executeAction}
-            ></DropdownMenu>
-            <DropdownMenu
-              buttonLabel={"BDD Operations"}
-              options={BDDOperations}
-              executeAction={executeAction}
-            ></DropdownMenu>
-            <DropdownMenu
-              buttonLabel={"Z3 Operations"}
-              options={Z3Operations}
-              executeAction={executeAction}
-            ></DropdownMenu>
-            <DropdownMenu
-              buttonLabel={"Export To"}
-              options={exportOperations}
-              executeAction={downloadFile}
-            />
-            <DropdownMenu
-              buttonLabel={"Select View"}
-              options={viewOptions}
-              executeAction={toggleView}
-              className="bg-blue-500 text-white p-2 rounded"
-            />
-            {collabEnabled && (
-              <div className="ml-4 flex items-center gap-2">
-                <button
-                  className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-3 py-1 rounded"
-                  onClick={handleCopySessionLink}
-                >
-                  Copy session link
-                </button>
-                {copyMessage && (
-                  <span className="text-xs text-gray-600">{copyMessage}</span>
-                )}
-              </div>
-            )}
-            {!collabEnabled && collabFeatureAvailable && (
-              <div className="ml-4 flex items-center gap-2">
-                <button
-                  className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-3 py-1 rounded"
-                  onClick={handleStartCollab}
-                >
-                  Iniciar colaboración
-                </button>
-                {collabStatus && (
-                  <span className="text-xs text-gray-600">{collabStatus}</span>
-                )}
-              </div>
-            )}
-          </Toolbar>
           {/* Text Editor or feature model */}
           <UVLEditor
             editorRef={editorRef}

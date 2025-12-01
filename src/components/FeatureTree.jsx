@@ -114,26 +114,36 @@ const TreeView = ({ treeData, executeAction, history }) => {
   ];
 
   const [statusMap, setStatusMap] = useState({});
+  const [panelHeight, setPanelHeight] = useState(() =>
+    typeof window !== "undefined" ? Math.max(400, window.innerHeight - 140) : 600
+  );
 
   useEffect(() => {
     setStatusMap({});
-    console.log(history);
-    
   }, [treeData, history]);
+
+  useEffect(() => {
+    const updateHeight = () => {
+      setPanelHeight(Math.max(400, window.innerHeight - 140));
+    };
+    updateHeight();
+    window.addEventListener("resize", updateHeight);
+    return () => window.removeEventListener("resize", updateHeight);
+  }, []);
 
   return (
     <ResizableBox
       width={300}
-      height={Infinity}
+      height={panelHeight}
       axis="x"
-      minConstraints={[200, Infinity]}
-      maxConstraints={[500, Infinity]}
-      className="bg-neutral-300 text-neutral-900 p-4 resize-handle-right rounded-lg overflow-auto relative shadow-md"
+      minConstraints={[200, panelHeight]}
+      maxConstraints={[500, panelHeight]}
+      className="bg-neutral-300 text-neutral-900 p-4 resize-handle-right rounded-lg overflow-auto relative shadow-md h-full"
       handle={
         <div className="absolute right-0 top-0 h-full w-2 cursor-ew-resize z-20" />
       }
     >
-      <div className="space-y-4">
+      <div className="space-y-4 h-full">
         <DropdownMenu
           buttonLabel={"Configuration Operations"}
           options={SATOperations}
