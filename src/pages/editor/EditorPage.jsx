@@ -126,6 +126,18 @@ function EditorPage({ selectedFile, setNavControls }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoaded]);
 
+  // Restore saved editor content from localStorage when no file is being imported
+  useEffect(() => {
+    if (isLoaded && isEditorReady && !selectedFile) {
+      const saved = localStorage.getItem("flamapy-ide-content");
+      if (saved) {
+        editorRef.current.setValue(saved);
+        setInitialContent(saved);
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoaded, isEditorReady]);
+
   const viewOptions = useMemo(() => [
     { label: "Source", value: "source" },
     { label: "Graph", value: "graph" },
@@ -233,6 +245,9 @@ function EditorPage({ selectedFile, setNavControls }) {
     if (!isLoaded) return Promise.resolve(null);
     const code = editorRef.current.getValue();
     setInitialContent(code);
+    if (!collabConfig.enabled) {
+      localStorage.setItem("flamapy-ide-content", code);
+    }
     return call("validateModel", code)
       .then((result) => {
         setValidation(result);

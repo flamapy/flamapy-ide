@@ -27,12 +27,12 @@ def test_get_model_information():
     result = get_model_information()
 
     assert result['Average Branching Factor'] == 2
-    result['Leaf Number'] == 2
-    result['Estimated Number of Configurations'] == 4
-    result['Max Depth'] == 1
-    result['Atomic Sets'] == [['A'], ['B'], ['C']]
-    result['Core Features'] = ['A']
-    result['Leaf Features'] = ['B', 'C']
+    assert result['Leaf Number'] == 2
+    assert result['Estimated Number of Configurations'] == 4
+    assert result['Max Depth'] == 1
+    assert result['Atomic Sets'] == [['A'], ['B'], ['C']]
+    assert result['Core Features'] == ['A']
+    assert result['Leaf Features'] == ['B', 'C']
 
 # Test PySAT operation
 @pytest.mark.parametrize('operation,expected', [('PySATConfigurations', ['A', 'A, C', 'A, B, C']),
