@@ -8,8 +8,14 @@ const DropdownMenu = ({
   className = "w-full bg-[#356C99] text-white py-2 px-4 rounded shadow-lg flex justify-between items-center",
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [focusedIndex, setFocusedIndex] = useState(-1);
   const dropdownRef = useRef(null);
+  const itemRefs = useRef([]);
   const [menuStyle, setMenuStyle] = useState(null);
+
+  const selectableOptions = options?.filter(
+    (o) => o.type !== "section" && o.type !== "divider"
+  ) ?? [];
 
   const handleToggle = () => {
     if (!isOpen && dropdownRef.current) {
@@ -20,6 +26,7 @@ const DropdownMenu = ({
         width: rect.width,
       });
     }
+    setFocusedIndex(-1);
     setIsOpen((prev) => !prev);
   };
 
@@ -27,6 +34,33 @@ const DropdownMenu = ({
     await executeAction(action);
     setIsOpen(false);
   };
+
+  const handleKeyDown = (e) => {
+    if (!isOpen) {
+      if (e.key === "Enter" || e.key === " " || e.key === "ArrowDown") {
+        e.preventDefault();
+        handleToggle();
+      }
+      return;
+    }
+    if (e.key === "Escape") {
+      setIsOpen(false);
+      setFocusedIndex(-1);
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setFocusedIndex((i) => Math.min(i + 1, selectableOptions.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setFocusedIndex((i) => Math.max(i - 1, 0));
+    } else if (e.key === "Enter" && focusedIndex >= 0) {
+      e.preventDefault();
+      handleAction(selectableOptions[focusedIndex]);
+    }
+  };
+
+  useEffect(() => {
+    if (focusedIndex >= 0) itemRefs.current[focusedIndex]?.focus();
+  }, [focusedIndex]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -42,12 +76,14 @@ const DropdownMenu = ({
     };
   }, []);
 
+  let selectableIdx = -1;
+
   return (
-    <div ref={dropdownRef} className="relative inline-block w-max z-50">
+    <div ref={dropdownRef} className="relative inline-block w-max z-50" onKeyDown={handleKeyDown}>
       <button
         onClick={handleToggle}
         className={className}
-        aria-haspopup="true"
+        aria-haspopup="listbox"
         aria-expanded={isOpen}
       >
         {buttonLabel}
@@ -56,7 +92,7 @@ const DropdownMenu = ({
 
       {isOpen && (
         <div
-          className="fixed bg-white border border-[#356C99] rounded-lg shadow-lg z-50"
+          className="fixed bg-white dark:bg-gray-800 border border-[#356C99] dark:border-gray-600 rounded-lg shadow-lg z-50"
           style={{
             top: menuStyle?.top ?? 0,
             left: menuStyle?.left ?? 0,
@@ -79,13 +115,21 @@ const DropdownMenu = ({
               if (option.type === "divider") {
                 return <div key={option.label} className="border-t border-gray-200 my-1" />;
               }
+              const idx = ++selectableIdx;
               return (
                 <div
                   key={option.label}
+                  ref={(el) => (itemRefs.current[idx] = el)}
                   onClick={() => handleAction(option)}
+                  onKeyDown={(e) => e.key === "Enter" && handleAction(option)}
                   tabIndex={0}
-                  className="w-full text-left py-2 px-4 cursor-pointer hover:bg-[#0D486C] text-[#356C99] hover:text-white focus:outline-none focus:bg-[#0D486C] focus:text-white"
-                  role="menuitem"
+                  className={`w-full text-left py-2 px-4 cursor-pointer focus:outline-none ${
+                    focusedIndex === idx
+                      ? "bg-[#0D486C] text-white"
+                      : "text-[#356C99] dark:text-blue-300 hover:bg-[#0D486C] hover:text-white focus:bg-[#0D486C] focus:text-white"
+                  }`}
+                  role="option"
+                  aria-selected={focusedIndex === idx}
                 >
                   {option.label}
                 </div>

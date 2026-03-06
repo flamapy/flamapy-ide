@@ -8,7 +8,7 @@ const ExecutionOutput = ({
   axis = "y",
   minConstraints = [Infinity, 100],
   maxConstraints = [Infinity, 300],
-  className = "bg-gray-700 text-white p-4 resize-handle-top rounded-lg",
+  className = "bg-gray-700 dark:bg-gray-900 text-white p-4 resize-handle-top rounded-lg",
   handleResize,
   handleStop,
   children,

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -25,7 +25,16 @@ ChartJS.register(
 );
 
 const ProductDistributionChart = ({ data }) => {
-  console.log("Datos recibidos en el Chart:", data);
+  const chartRef = useRef(null);
+
+  const downloadPNG = () => {
+    const url = chartRef.current?.toBase64Image();
+    if (!url) return;
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'configuration-distribution.png';
+    a.click();
+  };
   // Verificamos si los datos ya existen y tienen la estructura esperada
   const { x, y, descriptive_statistics } = data || {};
 
@@ -94,14 +103,20 @@ const ProductDistributionChart = ({ data }) => {
     <div className="w-full p-4">
       <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
         {/* Título */}
-        <div className="bg-gray-50 px-6 py-4 border-b border-gray-200">
+        <div className="bg-gray-50 px-6 py-4 border-b border-gray-200 flex items-center justify-between">
           <h3 className="text-lg font-bold text-gray-800">Configuration Distribution</h3>
+          <button
+            onClick={downloadPNG}
+            className="text-sm px-3 py-1 bg-[#356C99] text-white rounded hover:bg-[#0D486C]"
+          >
+            Download PNG
+          </button>
         </div>
 
         <div className="p-6">
           {/* Gráfico */}
           <div className="h-[320px] mb-8">
-            <Line data={chartData} options={options} />
+            <Line ref={chartRef} data={chartData} options={options} />
           </div>
 
           {/* Grid de Estadísticas Descriptivas */}

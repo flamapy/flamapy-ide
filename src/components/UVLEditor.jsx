@@ -12,6 +12,7 @@ function UVLEditor({
   defaultCode = "",
   hide,
   collabConfig,
+  onEditorMount,
 }) {
   const collabRefs = useRef({ provider: null, ydoc: null });
 
@@ -24,6 +25,7 @@ function UVLEditor({
 
   function handleEditorDidMount(editor, monaco) {
     editorRef.current = editor;
+    onEditorMount?.();
     monaco.languages.register({ id: "uvl" });
 
     // Set the tokens provider (syntax highlighting)
@@ -132,6 +134,37 @@ function UVLEditor({
         { open: '"', close: '"' },
       ],
     });
+    monaco.languages.registerCompletionItemProvider("uvl", {
+      provideCompletionItems: (model, position) => {
+        const word = model.getWordUntilPosition(position);
+        const range = {
+          startLineNumber: position.lineNumber,
+          endLineNumber: position.lineNumber,
+          startColumn: word.startColumn,
+          endColumn: word.endColumn,
+        };
+        const kw = (label, insertText, detail) => ({
+          label,
+          kind: monaco.languages.CompletionItemKind.Keyword,
+          insertText,
+          insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+          detail,
+          range,
+        });
+        return {
+          suggestions: [
+            kw("namespace",  "namespace ${1:ModelName}\n",         "Declare model namespace"),
+            kw("features",   "features\n\t${1:Root}\n",            "Feature declarations block"),
+            kw("constraints","constraints\n\t${1:constraint}\n",   "Constraints block"),
+            kw("mandatory",  "mandatory\n\t\t${1:Feature}\n",      "Mandatory group"),
+            kw("optional",   "optional\n\t\t${1:Feature}\n",       "Optional group"),
+            kw("alternative","alternative\n\t\t${1:Feature}\n",    "Alternative (XOR) group"),
+            kw("or",         "or\n\t\t${1:Feature}\n",             "Or group"),
+          ],
+        };
+      },
+    });
+
     if (collabConfig?.enabled) {
       const ydoc = new Y.Doc();
       const provider = new WebsocketProvider(

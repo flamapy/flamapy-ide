@@ -1,6 +1,11 @@
 import pytest
 import json
-from public.flamapy.flamapy_ide import process_uvl_file, execute_pysat_operation, feature_tree, execute_configurator_operation, execute_export_transformation, execute_import_transformation, get_model_information
+from public.flamapy.flamapy_ide import (
+    process_uvl_file, execute_pysat_operation, feature_tree,
+    execute_configurator_operation, execute_export_transformation,
+    execute_import_transformation, get_model_information,
+    get_configuration_distribution, get_feature_inclusion_probabilities,
+)
 
 # Test to process a UVL file (valid)
 def test_process_uvl_file_valid():
@@ -76,6 +81,36 @@ def test_execute_configurator_operation(config, expected):
 
     assert isinstance(result, bool)
     assert result is expected
+
+def test_get_configuration_distribution():
+    process_uvl_file('./tests/test_models/uvlfile.uvl')
+    result = get_configuration_distribution()
+    assert 'x' in result
+    assert 'y' in result
+    assert 'descriptive_statistics' in result
+    assert len(result['x']) == len(result['y'])
+    assert isinstance(result['descriptive_statistics'], dict)
+
+
+def test_get_feature_inclusion_probabilities():
+    process_uvl_file('./tests/test_models/uvlfile.uvl')
+    result = get_feature_inclusion_probabilities()
+    assert 'x' in result
+    assert 'y' in result
+    assert 'colors' in result
+    assert len(result['x']) == len(result['y']) == len(result['colors'])
+    assert all(0.0 <= v <= 100.0 for v in result['y'])
+
+
+def test_bdd_feature_inclusion_probability_serializes_as_list():
+    """BDDFeatureInclusionProbability returns a dict — ensure it serialises to a
+    list of 'feature: probability' strings, not [object Object]."""
+    process_uvl_file('./tests/test_models/uvlfile.uvl')
+    result = execute_pysat_operation('BDDFeatureInclusionProbability')
+    parsed = json.loads(result)
+    assert isinstance(parsed, list)
+    assert all(isinstance(item, str) and ':' in item for item in parsed)
+
 
 def test_feature_tree():
     process_uvl_file('./tests/test_models/uvlfile.uvl')

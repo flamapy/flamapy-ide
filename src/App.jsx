@@ -19,6 +19,9 @@ function App() {
   const [hasConsented, setHasConsented] = useState(
     () => getCookie("ga_cookie_consent") === "true"
   );
+  const [darkMode, setDarkMode] = useState(
+    () => localStorage.getItem("flamapy-dark-mode") === "true"
+  );
 
   useEffect(() => {
     if (hasConsented) {
@@ -26,11 +29,16 @@ function App() {
     }
   }, [hasConsented]);
 
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", darkMode);
+    localStorage.setItem("flamapy-dark-mode", darkMode);
+  }, [darkMode]);
+
   return (
-    <BrowserRouter>
+    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <PageTracker />
-      <div className="h-screen w-screen flex flex-col">
-        <Navbar controls={navControls}>
+      <div className="h-screen w-screen flex flex-col bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+        <Navbar controls={navControls} darkMode={darkMode} toggleDark={() => setDarkMode((d) => !d)}>
           <Link
             to="/how-to-cite-us"
             className="text-m font-medium text-gray-600 hover:text-blue-600 transition-colors duration-200"

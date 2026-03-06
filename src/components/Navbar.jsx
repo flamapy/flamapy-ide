@@ -1,9 +1,9 @@
 /* eslint-disable react/prop-types */
 import { Link } from "react-router-dom";
 
-function Navbar({ children, controls }) {
+function Navbar({ children, controls, darkMode, toggleDark }) {
   return (
-    <nav className="relative z-20 flex items-center py-4 px-6 bg-white shadow gap-4">
+    <nav className="relative z-20 flex items-center py-4 px-6 bg-white dark:bg-gray-800 shadow gap-4">
       <div className="flex items-center gap-3 shrink-0">
         <Link
           to="/"
@@ -24,7 +24,16 @@ function Navbar({ children, controls }) {
           </div>
         )}
       </div>
-      <div className="flex gap-4 items-center shrink-0">{children}</div>
+      <div className="flex gap-4 items-center shrink-0">
+        {children}
+        <button
+          onClick={toggleDark}
+          aria-label="Toggle dark mode"
+          className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors text-lg"
+        >
+          {darkMode ? "☀️" : "🌙"}
+        </button>
+      </div>
     </nav>
   );
 }

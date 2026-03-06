@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -21,6 +21,17 @@ ChartJS.register(
 );
 
 const FeatureInclusionProbabilitiesChart = ({ data }) => {
+  const chartRef = useRef(null);
+
+  const downloadPNG = () => {
+    const url = chartRef.current?.toBase64Image();
+    if (!url) return;
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'feature-inclusion-probabilities.png';
+    a.click();
+  };
+
   // Extraemos x, y y colors del objeto recibido
   // Se espera una estructura: { x: [], y: [], colors: [] }
   const { x, y, colors } = data || {};
@@ -86,16 +97,22 @@ const FeatureInclusionProbabilitiesChart = ({ data }) => {
     <div className="w-full p-2">
       <div className="card shadow mb-4 border-0 rounded-xl overflow-hidden">
         {/* Header con estilo similar al anterior */}
-        <div className="card-header py-3 bg-gray-50 border-b border-gray-200 d-flex flex-row align-items-center justify-content-between">
+        <div className="card-header py-3 px-4 bg-gray-50 border-b border-gray-200 flex flex-row items-center justify-between">
           <h6 className="m-0 font-weight-bold text-primary">
             Feature Inclusion Probabilities
           </h6>
+          <button
+            onClick={downloadPNG}
+            className="text-sm px-3 py-1 bg-[#356C99] text-white rounded hover:bg-[#0D486C]"
+          >
+            Download PNG
+          </button>
         </div>
 
         <div className="card-body bg-white p-4">
           {/* Contenedor del Gráfico */}
           <div style={{ height: '300px', position: 'relative' }}>
-            <Bar data={chartData} options={options} />
+            <Bar ref={chartRef} data={chartData} options={options} />
           </div>
 
           {/* Leyenda Manual Personalizada */}

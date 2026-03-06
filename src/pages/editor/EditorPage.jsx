@@ -12,6 +12,7 @@ import FeatureModelVisualization from "../../components/FeatureModelVisualizatio
 import Wizzard from "../../components/Wizzard";
 import ProductDistributionChart from "../../components/ProductDistributionChart";
 import FeatureInclusionProbabilitiesChart from "../../components/FeatureInclusionProbabilitiesChart";
+import ErrorBoundary from "../../components/ErrorBoundary";
 import JSZip from "jszip";
 import { useWorkerClient } from "../../hooks/useWorkerClient";
 
@@ -80,6 +81,7 @@ function EditorPage({ selectedFile, setNavControls }) {
     result: selectedFile ? `Importing model '${selectedFile.name}'` : "FlamapyIDE is starting",
   });
   const [copyMessage, setCopyMessage] = useState("");
+  const [shareMessage, setShareMessage] = useState("");
   const [collabStatus, setCollabStatus] = useState("");
   const [initialContent, setInitialContent] = useState("");
   const [featureTree, setFeatureTree] = useState(null);
@@ -126,9 +128,18 @@ function EditorPage({ selectedFile, setNavControls }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoaded]);
 
-  // Restore saved editor content from localStorage when no file is being imported
+  // Restore editor content on startup: URL ?model= param takes priority over localStorage
   useEffect(() => {
     if (isLoaded && isEditorReady && !selectedFile) {
+      const modelParam = searchParams.get("model");
+      if (modelParam) {
+        try {
+          const decoded = decodeURIComponent(escape(atob(modelParam)));
+          editorRef.current.setValue(decoded);
+          setInitialContent(decoded);
+          return;
+        } catch { /* ignore malformed param */ }
+      }
       const saved = localStorage.getItem("flamapy-ide-content");
       if (saved) {
         editorRef.current.setValue(saved);
@@ -366,6 +377,12 @@ function EditorPage({ selectedFile, setNavControls }) {
 
     if (option.value === "configurator") setShowConfiguratorPanel(true);
 
+    if (option.value === "graph") {
+      setCurrentView("graph");
+      call("getFeatureTree").then((result) => setFeatureTree(result)).catch(() => {});
+      return;
+    }
+
     if (option.value === "configdist") {
       setCurrentView("configdist");
       setConfigDistData(null);
@@ -399,6 +416,20 @@ function EditorPage({ selectedFile, setNavControls }) {
     }
 
     setCurrentView(option.value);
+  }
+
+  async function handleCopyModelLink() {
+    const code = editorRef.current?.getValue() || "";
+    const encoded = btoa(unescape(encodeURIComponent(code)));
+    const url = new URL("/editor", window.location.href);
+    url.searchParams.set("model", encoded);
+    try {
+      await navigator.clipboard.writeText(url.toString());
+      setShareMessage("Link copied!");
+    } catch {
+      setShareMessage("Unable to copy");
+    }
+    setTimeout(() => setShareMessage(""), 2000);
   }
 
   async function handleCopySessionLink() {
@@ -490,17 +521,17 @@ function EditorPage({ selectedFile, setNavControls }) {
   const toolbarContent = useMemo(() => {
     return (
       <div className="w-full flex justify-center">
-        <div className="flex items-end gap-3 flex-nowrap overflow-x-auto overflow-visible px-3 py-1 bg-white/80 rounded shadow-sm">
+        <div className="flex items-end gap-3 flex-nowrap overflow-x-auto overflow-visible px-3 py-1 bg-white/80 dark:bg-gray-800/90 rounded shadow-sm">
 
           <div className="flex flex-col gap-1 whitespace-nowrap">
-            <span className="text-[11px] text-gray-600 text-center w-full">View</span>
-            <div className="h-px bg-gray-300 w-full" />
-            <div className="flex items-stretch rounded overflow-hidden border border-gray-300">
+            <span className="text-[11px] text-gray-600 dark:text-gray-300 text-center w-full">View</span>
+            <div className="h-px bg-gray-300 dark:bg-gray-600 w-full" />
+            <div className="flex items-stretch rounded overflow-hidden border border-gray-300 dark:border-gray-600">
               {viewOptions.map((option) => (
                 <button
                   key={option.value}
                   className={`px-2.5 py-2 text-sm ${
-                    currentView === option.value ? "bg-[#356C99] text-white" : "bg-white text-gray-700"
+                    currentView === option.value ? "bg-[#356C99] text-white" : "bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200"
                   }`}
                   onClick={() => toggleView(option)}
                 >
@@ -519,8 +550,8 @@ function EditorPage({ selectedFile, setNavControls }) {
           </div>
 
           <div className="flex flex-col gap-1 whitespace-nowrap">
-            <span className="text-[11px] text-gray-600 text-center w-full">Automated analysis</span>
-            <div className="h-px bg-gray-300 w-full" />
+            <span className="text-[11px] text-gray-600 dark:text-gray-300 text-center w-full">Automated analysis</span>
+            <div className="h-px bg-gray-300 dark:bg-gray-600 w-full" />
             <div className="flex items-end gap-1">
               <div className="flex rounded overflow-hidden border border-gray-300">
                 {solverOptions.map((option) => (
@@ -547,8 +578,8 @@ function EditorPage({ selectedFile, setNavControls }) {
           </div>
 
           <div className="flex flex-col gap-1 whitespace-nowrap">
-            <span className="text-[11px] text-gray-600 text-center w-full">Export</span>
-            <div className="h-px bg-gray-300 w-full" />
+            <span className="text-[11px] text-gray-600 dark:text-gray-300 text-center w-full">Export</span>
+            <div className="h-px bg-gray-300 dark:bg-gray-600 w-full" />
             <div className="flex rounded overflow-hidden border border-gray-300">
               <DropdownMenu
                 buttonLabel="Export"
@@ -556,6 +587,22 @@ function EditorPage({ selectedFile, setNavControls }) {
                 executeAction={downloadFile}
                 className="bg-white text-gray-700 py-2 px-3 rounded-none shadow-none w-[120px] justify-between"
               />
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-1 whitespace-nowrap">
+            <span className="text-[11px] text-gray-600 dark:text-gray-300 text-center w-full">Share</span>
+            <div className="h-px bg-gray-300 dark:bg-gray-600 w-full" />
+            <div className="flex items-end gap-1">
+              <div className="flex rounded overflow-hidden border border-gray-300 dark:border-gray-600">
+                <button
+                  className="px-2.5 py-2 text-sm bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600"
+                  onClick={handleCopyModelLink}
+                >
+                  Copy model link
+                </button>
+              </div>
+              {shareMessage && <span className="text-xs text-gray-600">{shareMessage}</span>}
             </div>
           </div>
 
@@ -597,7 +644,7 @@ function EditorPage({ selectedFile, setNavControls }) {
       </div>
     );
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [collabEnabled, collabFeatureAvailable, collabStatus, copyMessage, currentView, metricsOptions, selectedSolver, solverOptions, viewOptions]);
+  }, [collabEnabled, collabFeatureAvailable, collabStatus, copyMessage, currentView, metricsOptions, selectedSolver, shareMessage, solverOptions, viewOptions]);
 
   useEffect(() => {
     if (setNavControls) {
@@ -646,12 +693,16 @@ function EditorPage({ selectedFile, setNavControls }) {
           )}
           {currentView === "configdist" && (
             <div className="flex-1 overflow-auto">
-              <ProductDistributionChart data={configDistData} />
+              <ErrorBoundary>
+                <ProductDistributionChart data={configDistData} />
+              </ErrorBoundary>
             </div>
           )}
           {currentView === "fip" && (
             <div className="flex-1 overflow-auto">
-              <FeatureInclusionProbabilitiesChart data={fipData} />
+              <ErrorBoundary>
+                <FeatureInclusionProbabilitiesChart data={fipData} />
+              </ErrorBoundary>
             </div>
           )}
           {currentView === "configurator" && (
