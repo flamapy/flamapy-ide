@@ -60,7 +60,7 @@ const DropdownMenu = ({
           style={{
             top: menuStyle?.top ?? 0,
             left: menuStyle?.left ?? 0,
-            width: menuStyle?.width ?? "auto",
+            minWidth: menuStyle?.width ?? "auto",
           }}
           role="menu"
         >

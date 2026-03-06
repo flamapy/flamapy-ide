@@ -27,3 +27,11 @@ dist-ssr
 */*/__pycache__
 
 env/
+
+# Claude Code
+CLAUDE.md
+.claude/
+
+# Local environment variables
+.env
+.env.example

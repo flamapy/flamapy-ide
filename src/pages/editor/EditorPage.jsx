@@ -13,6 +13,7 @@ import Wizzard from "../../components/Wizzard";
 import ProductDistributionChart from "../../components/ProductDistributionChart";
 import FeatureInclusionProbabilitiesChart from "../../components/FeatureInclusionProbabilitiesChart";
 import JSZip from "jszip";
+import { useWorkerClient } from "../../hooks/useWorkerClient";
 
 // Full operation lists per solver — shown only when that plugin is enabled
 const ALL_SOLVER_OPERATIONS = {
@@ -55,14 +56,6 @@ const EXPORT_OPERATIONS = [
   { label: "Download UVL", value: "uvl" },
 ];
 
-const VIEW_OPTIONS = [
-  { label: "Source", value: "source" },
-  { label: "Graph", value: "graph" },
-  { label: "Config. Distribution", value: "configdist" },
-  { label: "Feature Prob.", value: "fip" },
-  { label: "Configurator", value: "configurator" },
-];
-
 function EditorPage({ selectedFile, setNavControls }) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -75,10 +68,11 @@ function EditorPage({ selectedFile, setNavControls }) {
     ? { enabled: true, docId: docIdFromQuery, endpoint: collabEndpoint }
     : { enabled: false };
 
-  const [worker, setWorker] = useState(null);
-  const [isLoaded, setIsLoaded] = useState(false);
+  const { isLoaded, pluginsConfig, call, restart } = useWorkerClient();
+
   const [isRunning, setIsRunning] = useState(false);
   const [isImported, setIsImported] = useState(true);
+  const [isEditorReady, setIsEditorReady] = useState(false);
   const [validation, setValidation] = useState(null);
   const [lastOutputHeight, setLastOutputHeight] = useState(150);
   const [output, setOutput] = useState({
@@ -94,7 +88,7 @@ function EditorPage({ selectedFile, setNavControls }) {
   const [history, setHistory] = useState(null);
   const [showConfiguratorPanel, setShowConfiguratorPanel] = useState(true);
 
-  // Plugin config read back from worker on load
+  // Plugin config synced from worker on load
   const [enabledPlugins, setEnabledPlugins] = useState({ sat: true, bdd: true, z3: false });
 
   // Z3 attribute optimization modal state
@@ -108,6 +102,49 @@ function EditorPage({ selectedFile, setNavControls }) {
 
   const [selectedSolver, setSelectedSolver] = useState("sat");
   const editorRef = useRef(null);
+
+  // Sync enabled plugins from worker config
+  useEffect(() => {
+    if (pluginsConfig?.plugins) {
+      const enabled = {};
+      for (const [key, val] of Object.entries(pluginsConfig.plugins)) {
+        enabled[key] = val.enabled;
+      }
+      setEnabledPlugins(enabled);
+    }
+  }, [pluginsConfig]);
+
+  // When worker finishes loading, update output and trigger file import if needed
+  useEffect(() => {
+    if (isLoaded) {
+      setOutput({
+        label: "Flamapy is ready",
+        result: "Here you will see the result of executing an operation",
+      });
+      if (selectedFile) setIsImported(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoaded]);
+
+  const viewOptions = useMemo(() => [
+    { label: "Source", value: "source" },
+    { label: "Graph", value: "graph" },
+  ], []);
+
+  const metricsOptions = useMemo(() => {
+    if (!enabledPlugins.bdd) return [];
+    return [
+      { label: "Config. Distribution", value: "configdist" },
+      { label: "Feature Prob.", value: "fip" },
+    ];
+  }, [enabledPlugins.bdd]);
+
+  // Reset to source if current view becomes unavailable (e.g. BDD disabled)
+  useEffect(() => {
+    if (!enabledPlugins.bdd && (currentView === "configdist" || currentView === "fip")) {
+      setCurrentView("source");
+    }
+  }, [enabledPlugins.bdd, currentView]);
 
   // Derived solver tabs — only enabled plugins
   const solverOptions = useMemo(
@@ -126,53 +163,13 @@ function EditorPage({ selectedFile, setNavControls }) {
     }
   }, [enabledPlugins, selectedSolver]);
 
-  function initializeWorker() {
-    const flamapyWorker = new Worker("/webworker.js");
-    flamapyWorker.onmessage = (event) => {
-      if (event.data.status === "loaded") {
-        setIsLoaded(true);
-        setOutput({
-          label: "Flamapy is ready",
-          result: "Here you will see the result of executing an operation",
-        });
-        // Sync enabled plugins from the config the worker actually loaded
-        if (event.data.pluginsConfig?.plugins) {
-          const enabled = {};
-          for (const [key, val] of Object.entries(event.data.pluginsConfig.plugins)) {
-            enabled[key] = val.enabled;
-          }
-          setEnabledPlugins(enabled);
-        }
-        if (selectedFile) setIsImported(false);
-      } else {
-        setOutput({
-          label: "Initialization exception",
-          result: `An exception has occurred when trying to initialize FlamapyIDE: ${event.data.exception}`,
-        });
-      }
-    };
-    setWorker(flamapyWorker);
-    return flamapyWorker;
-  }
-
+  // Import file once worker and editor are both ready
   useEffect(() => {
-    try {
-      const flamapyWorker = initializeWorker();
-      return () => flamapyWorker.terminate();
-    } catch (error) {
-      setOutput({
-        label: "Initialization exception",
-        result: `An exception has occurred when trying to initialize FlamapyIDE: ${error.toString()}`,
-      });
-    }
-  }, []);
-
-  useEffect(() => {
-    if (selectedFile && isLoaded && !isImported) {
+    if (selectedFile && isLoaded && !isImported && isEditorReady) {
       const reader = new FileReader();
       const fileName = selectedFile.name;
       const fileExtension = fileName.substring(fileName.indexOf(".") + 1);
-      reader.onload = (e) => {
+      reader.onload = async (e) => {
         const fileContent = e.target.result;
         setInitialContent(fileContent);
         if (fileExtension === "uvl") {
@@ -180,37 +177,33 @@ function EditorPage({ selectedFile, setNavControls }) {
           editorRef.current.layout();
           setIsImported(true);
         } else {
-          worker.postMessage({ action: "importModel", data: { fileContent, fileExtension } });
-          worker.onmessage = async (event) => {
-            if (event.data.results !== undefined) {
-              editorRef.current.setValue(event.data.results);
-              setInitialContent(event.data.results);
-              await editorRef.current.layout();
-              setIsImported(true);
-            } else if (event.data.error) {
-              setOutput({
-                label: "Import error",
-                result: event.data.error.includes("not_supported")
-                  ? "The provided file extension is not supported. Try: .gfm.json, .afm, .fide, .json, .xml or .uvl"
-                  : "There was an error importing the model. Please verify it is valid.",
-              });
-              setIsImported(true);
-            }
-          };
+          try {
+            const result = await call("importModel", { fileContent, fileExtension });
+            editorRef.current.setValue(result);
+            setInitialContent(result);
+            editorRef.current.layout();
+            setIsImported(true);
+          } catch (error) {
+            setOutput({
+              label: "Import error",
+              result: error.message?.includes("not_supported")
+                ? "The provided file extension is not supported. Try: .gfm.json, .afm, .fide, .json, .xml or .uvl"
+                : "There was an error importing the model. Please verify it is valid.",
+            });
+            setIsImported(true);
+          }
         }
       };
       reader.readAsText(selectedFile);
     }
-  }, [isLoaded, worker, isImported, selectedFile]);
+  }, [isLoaded, isImported, selectedFile, call, isEditorReady]);
 
+  // Fetch feature tree whenever validation succeeds
   useEffect(() => {
     if (validation?.valid) {
-      worker.postMessage({ action: "getFeatureTree" });
-      worker.onmessage = (event) => {
-        if (event.data.results !== undefined) setFeatureTree(event.data.results);
-      };
+      call("getFeatureTree").then((result) => setFeatureTree(result)).catch(() => {});
     }
-  }, [validation, worker]);
+  }, [validation, call]);
 
   useEffect(() => {
     if (currentView === "configurator") setShowConfiguratorPanel(true);
@@ -236,161 +229,116 @@ function EditorPage({ selectedFile, setNavControls }) {
       .filter((l) => l !== "");
   }
 
-  async function validateModel() {
-    if (!isLoaded) return;
+  function validateModel() {
+    if (!isLoaded) return Promise.resolve(null);
     const code = editorRef.current.getValue();
     setInitialContent(code);
-    worker.postMessage({ action: "validateModel", data: code });
-    worker.onmessage = (event) => {
-      if (event.data.results !== undefined) {
-        setValidation(() => event.data.results);
+    return call("validateModel", code)
+      .then((result) => {
+        setValidation(result);
         setConstraints(getConstraints(code));
-      } else if (event.data.error) {
+        return result;
+      })
+      .catch(() => {
         setOutput({
           label: "Validation error",
           result: "An exception occurred validating the model. Try restarting Flamapy.",
         });
-      }
-    };
+        return null;
+      });
   }
 
   async function executeAction(action) {
     if (!isLoaded) return;
-    if (validation == null) await validateModel();
-    if (validation?.valid) {
-      if (action.value === "Z3AttributeOptimization") {
-        worker.postMessage({ action: "getNumericalAttributes" });
-        worker.onmessage = (event) => {
-          if (event.data.results !== undefined) {
-            setNumericalAttributes(event.data.results);
-            setIsAttrOptModalOpen(true);
-          } else if (event.data.error) {
-            setOutput({ label: "Attribute extraction error", result: event.data.error });
-          }
-        };
-        return;
-      }
-      worker.postMessage({ action: "executeAction", data: action });
-      setIsRunning(true);
-      setOutput({ label: action.label, result: "Executing operation" });
-      worker.onmessage = (event) => {
-        if (event.data.results !== undefined) {
-          event.data.results.result = JSON.parse(event.data.results.result);
-          setOutput(event.data.results);
-        } else if (event.data.error) {
-          setOutput({ label: action.label, result: "An exception occurred. Check the model definition." });
-        }
-        setIsRunning(false);
-      };
-    } else {
+    const currentValidation = validation ?? await validateModel();
+    if (!currentValidation?.valid) {
       setOutput({ label: action.label, result: "Error: the model is not valid. Fix syntax errors and retry." });
+      return;
     }
+
+    if (action.value === "Z3AttributeOptimization") {
+      try {
+        const attrs = await call("getNumericalAttributes");
+        setNumericalAttributes(attrs);
+        setIsAttrOptModalOpen(true);
+      } catch (error) {
+        setOutput({ label: "Attribute extraction error", result: error.message });
+      }
+      return;
+    }
+
+    setIsRunning(true);
+    setOutput({ label: action.label, result: "Executing operation" });
+    try {
+      const result = await call("executeAction", action);
+      result.result = JSON.parse(result.result);
+      setOutput(result);
+    } catch {
+      setOutput({ label: action.label, result: "An exception occurred. Check the model definition." });
+    }
+    setIsRunning(false);
   }
 
   async function executeActionWithConf(action, configuration) {
     if (!isLoaded) return;
-    if (validation == null) await validateModel();
-    if (validation?.valid) {
-      if (action.isOperationWithConf) {
-        worker.postMessage({ action: "executeActionWithConf", data: { action, configuration } });
-        setIsRunning(true);
-        setOutput({ label: action.label, result: "Executing operation" });
-        worker.onmessage = (event) => {
-          if (event.data.results !== undefined) {
-            setOutput(event.data.results);
-          } else if (event.data.error) {
-            setOutput({ label: action.label, result: "An exception occurred. Check the model definition." });
-          }
-          setIsRunning(false);
-        };
-      } else if (action.value === "configurator") {
-        toggleView(action);
-      } else if (action.value === "downloadConfigurator") {
-        const zip = new JSZip();
-        try {
-          const response = await fetch("/assets/flamapy.conf.zip");
-          if (!response.ok) throw new Error("Failed to load base.zip");
-          const baseZip = await JSZip.loadAsync(await (await response.blob()).arrayBuffer());
-          baseZip.forEach((relativePath, file) => zip.file(relativePath, file.async("arraybuffer")));
-          const featureModel = new File([editorRef.current.getValue()], "FeatureModel.uvl", { type: "text/plain" });
-          zip.file(`models/${featureModel.name}`, featureModel);
-          saveAs(await zip.generateAsync({ type: "blob" }), "configurator.zip");
-        } catch (err) {
-          console.error("Error processing ZIP:", err);
-          alert("Failed to generate ZIP.");
-        }
-      }
-    } else {
+    const currentValidation = validation ?? await validateModel();
+    if (!currentValidation?.valid) {
       setOutput({ label: action.label, result: "Error: the model is not valid. Fix syntax errors and retry." });
+      return;
+    }
+
+    if (action.isOperationWithConf) {
+      setIsRunning(true);
+      setOutput({ label: action.label, result: "Executing operation" });
+      try {
+        const result = await call("executeActionWithConf", { action, configuration });
+        setOutput(result);
+      } catch {
+        setOutput({ label: action.label, result: "An exception occurred. Check the model definition." });
+      }
+      setIsRunning(false);
+    } else if (action.value === "configurator") {
+      toggleView(action);
+    } else if (action.value === "downloadConfigurator") {
+      const zip = new JSZip();
+      try {
+        const response = await fetch("/assets/flamapy.conf.zip");
+        if (!response.ok) throw new Error("Failed to load base.zip");
+        const baseZip = await JSZip.loadAsync(await (await response.blob()).arrayBuffer());
+        baseZip.forEach((relativePath, file) => zip.file(relativePath, file.async("arraybuffer")));
+        const featureModel = new File([editorRef.current.getValue()], "FeatureModel.uvl", { type: "text/plain" });
+        zip.file(`models/${featureModel.name}`, featureModel);
+        saveAs(await zip.generateAsync({ type: "blob" }), "configurator.zip");
+      } catch (err) {
+        console.error("Error processing ZIP:", err);
+        alert("Failed to generate ZIP.");
+      }
     }
   }
 
   function interruptExecution() {
     if (isLoaded) {
-      worker.terminate();
-      setIsLoaded(false);
+      restart();
       setIsRunning(false);
+      setValidation(null);
       setOutput({ label: "Execution interrupted", result: "Re-starting Flamapy..." });
-      initializeWorker();
     }
   }
 
   async function downloadFile(action) {
     if (!isLoaded) return;
-    worker.postMessage({ action: "downloadFile", data: action });
-    worker.onmessage = (event) => {
-      if (event.data.results !== undefined) {
-        saveAs(new File([event.data.results], `model.${action.value}`, { type: "text/plain;charset=utf-8" }));
-      } else if (event.data.error) {
-        setOutput({ label: "Export failed", result: event.data.error });
-      }
-    };
+    try {
+      const result = await call("downloadFile", action);
+      saveAs(new File([result], `model.${action.value}`, { type: "text/plain;charset=utf-8" }));
+    } catch (error) {
+      setOutput({ label: "Export failed", result: error.message });
+    }
   }
 
   async function toggleView(option) {
     if (!isLoaded) return;
-    if (validation == null) await validateModel();
-    if (validation?.valid) {
-      if (option.value === "configurator") setShowConfiguratorPanel(true);
-
-      if (option.value === "configdist") {
-        setCurrentView("configdist");
-        setConfigDistData(null);
-        setIsRunning(true);
-        setOutput({ label: "Configuration Distribution", result: "Computing..." });
-        worker.postMessage({ action: "getConfigurationDistribution" });
-        worker.onmessage = (event) => {
-          if (event.data.results !== undefined) {
-            setConfigDistData(event.data.results);
-            setOutput({ label: "Configuration Distribution", result: "Done" });
-          } else if (event.data.error) {
-            setOutput({ label: "Configuration Distribution Error", result: event.data.error });
-          }
-          setIsRunning(false);
-        };
-        return;
-      }
-
-      if (option.value === "fip") {
-        setCurrentView("fip");
-        setFipData(null);
-        setIsRunning(true);
-        setOutput({ label: "Feature Inclusion Probability", result: "Computing..." });
-        worker.postMessage({ action: "getFeatureInclusionProbabilities" });
-        worker.onmessage = (event) => {
-          if (event.data.results !== undefined) {
-            setFipData(event.data.results);
-            setOutput({ label: "Feature Inclusion Probability", result: "Done" });
-          } else if (event.data.error) {
-            setOutput({ label: "Feature Inclusion Probability Error", result: event.data.error });
-          }
-          setIsRunning(false);
-        };
-        return;
-      }
-
-      setCurrentView(option.value);
-    } else {
+    const currentValidation = validation ?? await validateModel();
+    if (!currentValidation?.valid) {
       const messages = {
         graph: "The model is not valid. Fix syntax errors before visualizing.",
         configurator: "The model is not valid. Fix syntax errors before configuring.",
@@ -398,7 +346,44 @@ function EditorPage({ selectedFile, setNavControls }) {
         fip: "The model is not valid. Fix syntax errors before computing probabilities.",
       };
       setOutput({ label: option.label, result: messages[option.value] ?? "The model is not valid." });
+      return;
     }
+
+    if (option.value === "configurator") setShowConfiguratorPanel(true);
+
+    if (option.value === "configdist") {
+      setCurrentView("configdist");
+      setConfigDistData(null);
+      setIsRunning(true);
+      setOutput({ label: "Configuration Distribution", result: "Computing..." });
+      try {
+        const result = await call("getConfigurationDistribution");
+        setConfigDistData(result);
+        setOutput({ label: "Configuration Distribution", result: "Done" });
+      } catch (error) {
+        setOutput({ label: "Configuration Distribution Error", result: error.message });
+      }
+      setIsRunning(false);
+      return;
+    }
+
+    if (option.value === "fip") {
+      setCurrentView("fip");
+      setFipData(null);
+      setIsRunning(true);
+      setOutput({ label: "Feature Inclusion Probability", result: "Computing..." });
+      try {
+        const result = await call("getFeatureInclusionProbabilities");
+        setFipData(result);
+        setOutput({ label: "Feature Inclusion Probability", result: "Done" });
+      } catch (error) {
+        setOutput({ label: "Feature Inclusion Probability Error", result: error.message });
+      }
+      setIsRunning(false);
+      return;
+    }
+
+    setCurrentView(option.value);
   }
 
   async function handleCopySessionLink() {
@@ -472,17 +457,12 @@ function EditorPage({ selectedFile, setNavControls }) {
       setOutput({ label: "Optimization Error", result: "No attributes selected for optimization." });
       return;
     }
-    worker.postMessage({ action: "executeAttributeOptimization", data: selectedGoals });
     setIsRunning(true);
     setOutput({ label: "Attribute Optimization", result: "Executing operation" });
-    worker.onmessage = (event) => {
-      if (event.data.results !== undefined) {
-        setOutput(event.data.results);
-      } else if (event.data.error) {
-        setOutput({ label: "Attribute Optimization", result: "An exception occurred. Check the model definition." });
-      }
-      setIsRunning(false);
-    };
+    call("executeAttributeOptimization", selectedGoals)
+      .then((result) => setOutput(result))
+      .catch(() => setOutput({ label: "Attribute Optimization", result: "An exception occurred. Check the model definition." }))
+      .finally(() => setIsRunning(false));
     closeAttrOptModal();
   }
 
@@ -500,8 +480,8 @@ function EditorPage({ selectedFile, setNavControls }) {
           <div className="flex flex-col gap-1 whitespace-nowrap">
             <span className="text-[11px] text-gray-600 text-center w-full">View</span>
             <div className="h-px bg-gray-300 w-full" />
-            <div className="flex rounded overflow-hidden border border-gray-300">
-              {VIEW_OPTIONS.map((option) => (
+            <div className="flex items-stretch rounded overflow-hidden border border-gray-300">
+              {viewOptions.map((option) => (
                 <button
                   key={option.value}
                   className={`px-2.5 py-2 text-sm ${
@@ -512,6 +492,14 @@ function EditorPage({ selectedFile, setNavControls }) {
                   {option.label}
                 </button>
               ))}
+              {metricsOptions.length > 0 && (
+                <DropdownMenu
+                  buttonLabel="Metrics"
+                  options={metricsOptions}
+                  executeAction={toggleView}
+                  className="bg-white text-gray-700 py-2 px-3 rounded-none shadow-none w-[100px] justify-between border-l border-gray-300"
+                />
+              )}
             </div>
           </div>
 
@@ -594,7 +582,7 @@ function EditorPage({ selectedFile, setNavControls }) {
       </div>
     );
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [collabEnabled, collabFeatureAvailable, collabStatus, copyMessage, currentView, selectedSolver, solverOptions]);
+  }, [collabEnabled, collabFeatureAvailable, collabStatus, copyMessage, currentView, metricsOptions, selectedSolver, solverOptions, viewOptions]);
 
   useEffect(() => {
     if (setNavControls) {
@@ -636,6 +624,7 @@ function EditorPage({ selectedFile, setNavControls }) {
             defaultCode={initialContent}
             hide={currentView !== "source"}
             collabConfig={collabConfig}
+            onEditorMount={() => setIsEditorReady(true)}
           />
           {currentView === "graph" && (
             <FeatureModelVisualization treeData={featureTree} constraints={constraints} />
@@ -651,7 +640,7 @@ function EditorPage({ selectedFile, setNavControls }) {
             </div>
           )}
           {currentView === "configurator" && (
-            <Wizzard worker={worker} setHistory={setHistory} />
+            <Wizzard call={call} setHistory={setHistory} />
           )}
 
           <ExecutionOutput

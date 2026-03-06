@@ -4,7 +4,7 @@
       "flamapy_fw-2.5.0-py3-none-any.whl",
       "flamapy_fm-2.5.0-py3-none-any.whl",
       "flamapy-2.5.0-py3-none-any.whl",
-      "flamapy_configurator-2.5.0-py3-none-any.whl",
+      "flamapy_configurator-2.0.1-py3-none-any.whl",
       "uvlparser-2.0.1-py3-none-any.whl",
       "afmparser-1.0.3-py3-none-any.whl",
       "antlr4_python3_runtime-4.13.1-py3-none-any.whl",
@@ -24,7 +24,7 @@
       "enabled": true,
       "wheels": [
         "flamapy_bdd-2.5.0-py3-none-any.whl",
-        "dd-0.5.7-py3-none-any.whl",
+        "dd-0.6.0-py3-none-any.whl",
         "astutils-0.0.6-py3-none-any.whl"
       ]
     },

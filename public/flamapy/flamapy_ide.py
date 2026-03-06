@@ -13,9 +13,13 @@ from collections import defaultdict
 from flamapy.metamodels.fm_metamodel.operations import FMLanguageLevel
 from flamapy.metamodels.fm_metamodel.models import AttributeType
 
-from flamapy.metamodels.z3_metamodel.transformations import FmToZ3
-from flamapy.metamodels.z3_metamodel.operations import Z3AttributeOptimization
-from flamapy.metamodels.z3_metamodel.operations.interfaces import OptimizationGoal
+try:
+    from flamapy.metamodels.z3_metamodel.transformations import FmToZ3
+    from flamapy.metamodels.z3_metamodel.operations import Z3AttributeOptimization
+    from flamapy.metamodels.z3_metamodel.operations.interfaces import OptimizationGoal
+    _z3_available = True
+except ImportError:
+    _z3_available = False
 
 
 fm = None
@@ -104,7 +108,8 @@ def get_language_level(fm: FLAMAFeatureModel):
     levels = FMLanguageLevel().execute(fm.fm_model).get_result()
     major_level = levels.major.name.capitalize()
     minors_levels = ', '.join([m.name.replace('_', ' ').capitalize() for m in levels.minors])
-    return f'{major_level}{f' ({minors_levels})' if minors_levels else ""}'
+    minors_suffix = " ({})".format(minors_levels) if minors_levels else ""
+    return "{}{}".format(major_level, minors_suffix)
 
 
 def execute_pysat_operation(name: str):
@@ -126,6 +131,8 @@ def execute_pysat_operation(name: str):
         operation.execute(sat_model)
     
     elif 'Z3' in name:
+        if not _z3_available:
+            return json.dumps("Z3 plugin is not installed.")
         print(f"Executing Z3 operation {name}")
         z3_model = dm.use_transformation_m2m(feature_model, "z3")
         # Get the operation
@@ -137,7 +144,7 @@ def execute_pysat_operation(name: str):
     result = operation.get_result()
     if type(result) is list:
         return json.dumps([str(conf) for conf in result])
-    if isinstance(result,defaultdict):
+    if isinstance(result, (defaultdict, dict)):
         return json.dumps(["{}: {}".format(str(k), str(v)) for k,v in result.items()])
     return json.dumps(result)
 
@@ -273,6 +280,8 @@ def execute_configurator_operation(name: str, conf):
     return result
 
 def execute_attribute_optimization(attributes_goals):
+    if not _z3_available:
+        return ["Z3 plugin is not installed."]
     print("Attributes goals received:", attributes_goals)
 
     feature_model = fm.fm_model
