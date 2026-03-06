@@ -1,4 +1,4 @@
-import json, os
+import json, math, os
 from flamapy.interfaces.python import FLAMAFeatureModel
 from flamapy.core.exceptions import FlamaException
 from antlr4 import CommonTokenStream, FileStream
@@ -222,6 +222,29 @@ def get_numerical_attributes():
         attributes = list(attributes)
         print("Numerical attributes:", attributes)
         return attributes
+
+def get_configuration_distribution():
+    dm = DiscoverMetamodels()
+    bdd_model = dm.use_transformation_m2m(fm.fm_model, 'bdd')
+    operation = dm.get_operation(bdd_model, 'BDDProductDistribution')
+    operation.execute(bdd_model)
+    configdist = operation.product_distribution()
+    descriptive_stats = operation.descriptive_statistics()
+    dist_stats = {e: round(v, 2) for e, v in descriptive_stats.items()}
+    return {'x': list(range(len(configdist))), 'y': configdist, 'descriptive_statistics': dist_stats}
+
+def get_feature_inclusion_probabilities():
+    dm = DiscoverMetamodels()
+    bdd_model = dm.use_transformation_m2m(fm.fm_model, 'bdd')
+    operation = dm.get_operation(bdd_model, 'BDDFeatureInclusionProbability')
+    operation.execute(bdd_model)
+    prob = operation.get_result()
+    n_features = len(prob)
+    x_axis = [x / 100.0 for x in range(0, 101, 1)]
+    y_axis = [round(sum(math.isclose(x, round(p, 2), abs_tol=1e-4) for p in prob.values()) / n_features, 2) * 100 for x in x_axis]
+    colors = ['rgb(231, 74, 59)'] + ['rgb(126, 157, 188)'] * (len(x_axis) - 2) + ['rgb(28, 200, 138)']
+    colors[50] = 'rgb(246, 194, 62)'
+    return {'x': x_axis, 'y': y_axis, 'colors': colors}
 
 def execute_configurator_operation(name: str, conf):
     dm = DiscoverMetamodels()

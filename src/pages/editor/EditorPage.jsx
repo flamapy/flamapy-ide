@@ -1,5 +1,5 @@
 /* eslint-disable react/prop-types */
-import { useEffect, useState, useRef, useMemo } from "react";
+import { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import "react-resizable/css/styles.css";
 import ModelInformation from "../../components/ModelInformation";
@@ -10,7 +10,58 @@ import { saveAs } from "file-saver";
 import TreeView from "../../components/FeatureTree";
 import FeatureModelVisualization from "../../components/FeatureModelVisualization";
 import Wizzard from "../../components/Wizzard";
+import ProductDistributionChart from "../../components/ProductDistributionChart";
+import FeatureInclusionProbabilitiesChart from "../../components/FeatureInclusionProbabilitiesChart";
 import JSZip from "jszip";
+
+// Full operation lists per solver — shown only when that plugin is enabled
+const ALL_SOLVER_OPERATIONS = {
+  sat: [
+    { label: "Configurations", value: "PySATConfigurations" },
+    { label: "Number of configurations", value: "PySATConfigurationsNumber" },
+    { label: "Dead features", value: "PySATDeadFeatures" },
+    { label: "Diagnosis", value: "PySATDiagnosis" },
+    { label: "False optional features", value: "PySATFalseOptionalFeatures" },
+    { label: "Satisfiable", value: "PySATSatisfiable" },
+  ],
+  bdd: [
+    { label: "Configurations", value: "BDDConfigurations" },
+    { label: "Number of configurations", value: "BDDConfigurationsNumber" },
+    { label: "Dead features", value: "BDDDeadFeatures" },
+    { label: "Satisfiable", value: "BDDSatisfiable" },
+    { label: "Configuration distribution", value: "BDDProductDistribution" },
+    { label: "Feature inclusion probability", value: "BDDFeatureInclusionProbability" },
+    { label: "Unique features", value: "BDDUniqueFeatures" },
+    { label: "Homogeneity", value: "BDDHomogeneity" },
+    { label: "Variability", value: "BDDVariability" },
+    { label: "Variant features", value: "BDDVariantFeatures" },
+  ],
+  z3: [
+    { label: "Satisfiable", value: "Z3Satisfiable" },
+    { label: "Configurations", value: "Z3Configurations" },
+    { label: "Number of configurations", value: "Z3ConfigurationsNumber" },
+    { label: "Core features", value: "Z3CoreFeatures" },
+    { label: "Dead features", value: "Z3DeadFeatures" },
+    { label: "False-optional features", value: "Z3FalseOptionalFeatures" },
+    { label: "Attribute optimization", value: "Z3AttributeOptimization" },
+  ],
+};
+
+const EXPORT_OPERATIONS = [
+  { label: "AFM", value: "afm" },
+  { label: "Glencoe", value: "gfm.json" },
+  { label: "JSON", value: "json" },
+  { label: "SPLOT", value: "sxfm" },
+  { label: "Download UVL", value: "uvl" },
+];
+
+const VIEW_OPTIONS = [
+  { label: "Source", value: "source" },
+  { label: "Graph", value: "graph" },
+  { label: "Config. Distribution", value: "configdist" },
+  { label: "Feature Prob.", value: "fip" },
+  { label: "Configurator", value: "configurator" },
+];
 
 function EditorPage({ selectedFile, setNavControls }) {
   const location = useLocation();
@@ -21,11 +72,7 @@ function EditorPage({ selectedFile, setNavControls }) {
   const collabEnabled = collabFeatureAvailable && !!docIdFromQuery;
   const collabEndpoint = import.meta.env.VITE_COLLAB_URL || "ws://localhost:1234";
   const collabConfig = collabEnabled
-    ? {
-        enabled: true,
-        docId: docIdFromQuery,
-        endpoint: collabEndpoint,
-      }
+    ? { enabled: true, docId: docIdFromQuery, endpoint: collabEndpoint }
     : { enabled: false };
 
   const [worker, setWorker] = useState(null);
@@ -36,9 +83,7 @@ function EditorPage({ selectedFile, setNavControls }) {
   const [lastOutputHeight, setLastOutputHeight] = useState(150);
   const [output, setOutput] = useState({
     label: "Loading Flamapy...",
-    result: selectedFile
-      ? `Importing model '${selectedFile.name}'`
-      : "FlamapyIDE is starting",
+    result: selectedFile ? `Importing model '${selectedFile.name}'` : "FlamapyIDE is starting",
   });
   const [copyMessage, setCopyMessage] = useState("");
   const [collabStatus, setCollabStatus] = useState("");
@@ -47,82 +92,420 @@ function EditorPage({ selectedFile, setNavControls }) {
   const [currentView, setCurrentView] = useState("source");
   const [constraints, setConstraints] = useState(null);
   const [history, setHistory] = useState(null);
-  const [isAttributeOptimizationModalOpen, setIsAttributeOptimizationModalOpen] = useState(false);
+  const [showConfiguratorPanel, setShowConfiguratorPanel] = useState(true);
+
+  // Plugin config read back from worker on load
+  const [enabledPlugins, setEnabledPlugins] = useState({ sat: true, bdd: true, z3: false });
+
+  // Z3 attribute optimization modal state
+  const [isAttrOptModalOpen, setIsAttrOptModalOpen] = useState(false);
   const [numericalAttributes, setNumericalAttributes] = useState(null);
   const [optimizationGoals, setOptimizationGoals] = useState({});
-  const [showConfiguratorPanel, setShowConfiguratorPanel] = useState(true);
-  const solverOperations = {
-    sat: [
-      { label: "Configurations", value: "PySATConfigurations" },
-      { label: "Number of configurations", value: "PySATConfigurationsNumber" },
-      { label: "Dead features", value: "PySATDeadFeatures" },
-      { label: "Diagnosis", value: "PySATDiagnosis" },
-      { label: "False optional features", value: "PySATFalseOptionalFeatures" },
-      { label: "Satisfiable", value: "PySATSatisfiable" },
-    ],
-    bdd: [
-      { label: "Configurations", value: "BDDConfigurations" },
-      { label: "Number of configurations", value: "BDDConfigurationsNumber" },
-      { label: "Dead features", value: "BDDDeadFeatures" },
-      { label: "Satisfiable", value: "BDDSatisfiable" },
-      { label: "Configuration distribution", value: "BDDProductDistribution" },
-      { label: "Feature inclusion probability", value: "BDDFeatureInclusionProbability" },
-      { label: "Unique features", value: "BDDUniqueFeatures" },
-      { label: "Homogeneity", value: "BDDHomogeneity" },
-      { label: "Variability", value: "BDDVariability" },
-      { label: "Variant features", value: "BDDVariantFeatures" },
-    ],
-    z3: [
-      { label: "Satisfiable", value: "Z3Satisfiable" },
-      { label: "Configurations", value: "Z3Configurations" },
-      { label: "Number of configurations", value: "Z3ConfigurationsNumber" },
-      { label: "Core features", value: "Z3CoreFeatures" },
-      { label: "Dead features", value: "Z3DeadFeatures" },
-      { label: "False-optional features", value: "Z3FalseOptionalFeatures" },
-      { label: "Attribute optimization", value: "Z3AttributeOptimization" },
-    ],
-  };
 
-  const exportOperations = [
-    { label: "AFM", value: "afm" },
-    { label: "Glencoe", value: "gfm.json" },
-    { label: "JSON", value: "json" },
-    { label: "SPLOT", value: "sxfm" },
-    { label: "Download UVL", value: "uvl" },
-  ];
+  // Chart data state
+  const [configDistData, setConfigDistData] = useState(null);
+  const [fipData, setFipData] = useState(null);
 
-  const viewOptions = [
-    { label: "Source", value: "source" },
-    { label: "Graph", value: "graph" },
-    { label: "Configurator", value: "configurator" },
-  ];
-  const solverOptions = [
-    { label: "SAT", value: "sat" },
-    { label: "BDD", value: "bdd" },
-    { label: "Z3", value: "z3" },
-  ];
   const [selectedSolver, setSelectedSolver] = useState("sat");
   const editorRef = useRef(null);
+
+  // Derived solver tabs — only enabled plugins
+  const solverOptions = useMemo(
+    () =>
+      Object.entries(enabledPlugins)
+        .filter(([, enabled]) => enabled)
+        .map(([key]) => ({ label: key.toUpperCase(), value: key })),
+    [enabledPlugins]
+  );
+
+  // Keep selectedSolver valid after config loads
   useEffect(() => {
-    if (currentView === "configurator") {
-      setShowConfiguratorPanel(true);
+    if (!enabledPlugins[selectedSolver]) {
+      const first = Object.entries(enabledPlugins).find(([, v]) => v);
+      if (first) setSelectedSolver(first[0]);
     }
+  }, [enabledPlugins, selectedSolver]);
+
+  function initializeWorker() {
+    const flamapyWorker = new Worker("/webworker.js");
+    flamapyWorker.onmessage = (event) => {
+      if (event.data.status === "loaded") {
+        setIsLoaded(true);
+        setOutput({
+          label: "Flamapy is ready",
+          result: "Here you will see the result of executing an operation",
+        });
+        // Sync enabled plugins from the config the worker actually loaded
+        if (event.data.pluginsConfig?.plugins) {
+          const enabled = {};
+          for (const [key, val] of Object.entries(event.data.pluginsConfig.plugins)) {
+            enabled[key] = val.enabled;
+          }
+          setEnabledPlugins(enabled);
+        }
+        if (selectedFile) setIsImported(false);
+      } else {
+        setOutput({
+          label: "Initialization exception",
+          result: `An exception has occurred when trying to initialize FlamapyIDE: ${event.data.exception}`,
+        });
+      }
+    };
+    setWorker(flamapyWorker);
+    return flamapyWorker;
+  }
+
+  useEffect(() => {
+    try {
+      const flamapyWorker = initializeWorker();
+      return () => flamapyWorker.terminate();
+    } catch (error) {
+      setOutput({
+        label: "Initialization exception",
+        result: `An exception has occurred when trying to initialize FlamapyIDE: ${error.toString()}`,
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    if (selectedFile && isLoaded && !isImported) {
+      const reader = new FileReader();
+      const fileName = selectedFile.name;
+      const fileExtension = fileName.substring(fileName.indexOf(".") + 1);
+      reader.onload = (e) => {
+        const fileContent = e.target.result;
+        setInitialContent(fileContent);
+        if (fileExtension === "uvl") {
+          editorRef.current.setValue(fileContent);
+          editorRef.current.layout();
+          setIsImported(true);
+        } else {
+          worker.postMessage({ action: "importModel", data: { fileContent, fileExtension } });
+          worker.onmessage = async (event) => {
+            if (event.data.results !== undefined) {
+              editorRef.current.setValue(event.data.results);
+              setInitialContent(event.data.results);
+              await editorRef.current.layout();
+              setIsImported(true);
+            } else if (event.data.error) {
+              setOutput({
+                label: "Import error",
+                result: event.data.error.includes("not_supported")
+                  ? "The provided file extension is not supported. Try: .gfm.json, .afm, .fide, .json, .xml or .uvl"
+                  : "There was an error importing the model. Please verify it is valid.",
+              });
+              setIsImported(true);
+            }
+          };
+        }
+      };
+      reader.readAsText(selectedFile);
+    }
+  }, [isLoaded, worker, isImported, selectedFile]);
+
+  useEffect(() => {
+    if (validation?.valid) {
+      worker.postMessage({ action: "getFeatureTree" });
+      worker.onmessage = (event) => {
+        if (event.data.results !== undefined) setFeatureTree(event.data.results);
+      };
+    }
+  }, [validation, worker]);
+
+  useEffect(() => {
+    if (currentView === "configurator") setShowConfiguratorPanel(true);
   }, [currentView]);
+
+  // eslint-disable-next-line no-unused-vars
+  const handleResize = (e, data) => {
+    e.preventDefault();
+    if (data.size.height !== lastOutputHeight) {
+      editorRef.current.layout({});
+      setLastOutputHeight(data.size.height);
+    }
+  };
+
+  function getConstraints(code) {
+    const startIndex = code.indexOf("constraints");
+    if (startIndex === -1) return null;
+    return code
+      .substring(startIndex)
+      .split("\n")
+      .slice(1)
+      .map((l) => l.trim())
+      .filter((l) => l !== "");
+  }
+
+  async function validateModel() {
+    if (!isLoaded) return;
+    const code = editorRef.current.getValue();
+    setInitialContent(code);
+    worker.postMessage({ action: "validateModel", data: code });
+    worker.onmessage = (event) => {
+      if (event.data.results !== undefined) {
+        setValidation(() => event.data.results);
+        setConstraints(getConstraints(code));
+      } else if (event.data.error) {
+        setOutput({
+          label: "Validation error",
+          result: "An exception occurred validating the model. Try restarting Flamapy.",
+        });
+      }
+    };
+  }
+
+  async function executeAction(action) {
+    if (!isLoaded) return;
+    if (validation == null) await validateModel();
+    if (validation?.valid) {
+      if (action.value === "Z3AttributeOptimization") {
+        worker.postMessage({ action: "getNumericalAttributes" });
+        worker.onmessage = (event) => {
+          if (event.data.results !== undefined) {
+            setNumericalAttributes(event.data.results);
+            setIsAttrOptModalOpen(true);
+          } else if (event.data.error) {
+            setOutput({ label: "Attribute extraction error", result: event.data.error });
+          }
+        };
+        return;
+      }
+      worker.postMessage({ action: "executeAction", data: action });
+      setIsRunning(true);
+      setOutput({ label: action.label, result: "Executing operation" });
+      worker.onmessage = (event) => {
+        if (event.data.results !== undefined) {
+          event.data.results.result = JSON.parse(event.data.results.result);
+          setOutput(event.data.results);
+        } else if (event.data.error) {
+          setOutput({ label: action.label, result: "An exception occurred. Check the model definition." });
+        }
+        setIsRunning(false);
+      };
+    } else {
+      setOutput({ label: action.label, result: "Error: the model is not valid. Fix syntax errors and retry." });
+    }
+  }
+
+  async function executeActionWithConf(action, configuration) {
+    if (!isLoaded) return;
+    if (validation == null) await validateModel();
+    if (validation?.valid) {
+      if (action.isOperationWithConf) {
+        worker.postMessage({ action: "executeActionWithConf", data: { action, configuration } });
+        setIsRunning(true);
+        setOutput({ label: action.label, result: "Executing operation" });
+        worker.onmessage = (event) => {
+          if (event.data.results !== undefined) {
+            setOutput(event.data.results);
+          } else if (event.data.error) {
+            setOutput({ label: action.label, result: "An exception occurred. Check the model definition." });
+          }
+          setIsRunning(false);
+        };
+      } else if (action.value === "configurator") {
+        toggleView(action);
+      } else if (action.value === "downloadConfigurator") {
+        const zip = new JSZip();
+        try {
+          const response = await fetch("/assets/flamapy.conf.zip");
+          if (!response.ok) throw new Error("Failed to load base.zip");
+          const baseZip = await JSZip.loadAsync(await (await response.blob()).arrayBuffer());
+          baseZip.forEach((relativePath, file) => zip.file(relativePath, file.async("arraybuffer")));
+          const featureModel = new File([editorRef.current.getValue()], "FeatureModel.uvl", { type: "text/plain" });
+          zip.file(`models/${featureModel.name}`, featureModel);
+          saveAs(await zip.generateAsync({ type: "blob" }), "configurator.zip");
+        } catch (err) {
+          console.error("Error processing ZIP:", err);
+          alert("Failed to generate ZIP.");
+        }
+      }
+    } else {
+      setOutput({ label: action.label, result: "Error: the model is not valid. Fix syntax errors and retry." });
+    }
+  }
+
+  function interruptExecution() {
+    if (isLoaded) {
+      worker.terminate();
+      setIsLoaded(false);
+      setIsRunning(false);
+      setOutput({ label: "Execution interrupted", result: "Re-starting Flamapy..." });
+      initializeWorker();
+    }
+  }
+
+  async function downloadFile(action) {
+    if (!isLoaded) return;
+    worker.postMessage({ action: "downloadFile", data: action });
+    worker.onmessage = (event) => {
+      if (event.data.results !== undefined) {
+        saveAs(new File([event.data.results], `model.${action.value}`, { type: "text/plain;charset=utf-8" }));
+      } else if (event.data.error) {
+        setOutput({ label: "Export failed", result: event.data.error });
+      }
+    };
+  }
+
+  async function toggleView(option) {
+    if (!isLoaded) return;
+    if (validation == null) await validateModel();
+    if (validation?.valid) {
+      if (option.value === "configurator") setShowConfiguratorPanel(true);
+
+      if (option.value === "configdist") {
+        setCurrentView("configdist");
+        setConfigDistData(null);
+        setIsRunning(true);
+        setOutput({ label: "Configuration Distribution", result: "Computing..." });
+        worker.postMessage({ action: "getConfigurationDistribution" });
+        worker.onmessage = (event) => {
+          if (event.data.results !== undefined) {
+            setConfigDistData(event.data.results);
+            setOutput({ label: "Configuration Distribution", result: "Done" });
+          } else if (event.data.error) {
+            setOutput({ label: "Configuration Distribution Error", result: event.data.error });
+          }
+          setIsRunning(false);
+        };
+        return;
+      }
+
+      if (option.value === "fip") {
+        setCurrentView("fip");
+        setFipData(null);
+        setIsRunning(true);
+        setOutput({ label: "Feature Inclusion Probability", result: "Computing..." });
+        worker.postMessage({ action: "getFeatureInclusionProbabilities" });
+        worker.onmessage = (event) => {
+          if (event.data.results !== undefined) {
+            setFipData(event.data.results);
+            setOutput({ label: "Feature Inclusion Probability", result: "Done" });
+          } else if (event.data.error) {
+            setOutput({ label: "Feature Inclusion Probability Error", result: event.data.error });
+          }
+          setIsRunning(false);
+        };
+        return;
+      }
+
+      setCurrentView(option.value);
+    } else {
+      const messages = {
+        graph: "The model is not valid. Fix syntax errors before visualizing.",
+        configurator: "The model is not valid. Fix syntax errors before configuring.",
+        configdist: "The model is not valid. Fix syntax errors before computing distribution.",
+        fip: "The model is not valid. Fix syntax errors before computing probabilities.",
+      };
+      setOutput({ label: option.label, result: messages[option.value] ?? "The model is not valid." });
+    }
+  }
+
+  async function handleCopySessionLink() {
+    if (!collabEnabled || !docIdFromQuery) return;
+    const url = new URL(window.location.href);
+    url.searchParams.set("doc", docIdFromQuery);
+    try {
+      await navigator.clipboard.writeText(url.toString());
+      setCopyMessage("Session link copied");
+    } catch {
+      setCopyMessage("Unable to copy link");
+    }
+    setTimeout(() => setCopyMessage(""), 2000);
+  }
+
+  const generateDocId = useCallback(() => {
+    if (crypto?.randomUUID) return crypto.randomUUID();
+    return `doc-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+  }, []);
+
+  async function checkCollabHealth() {
+    try {
+      const wsUrl = new URL(collabEndpoint);
+      const healthUrl = new URL(wsUrl);
+      healthUrl.protocol = wsUrl.protocol === "wss:" ? "https:" : "http:";
+      healthUrl.pathname = "/health";
+      const res = await fetch(healthUrl.toString(), { mode: "cors" });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  }
+
+  async function handleStartCollab() {
+    if (!collabFeatureAvailable) {
+      setCollabStatus("Enable VITE_ENABLE_COLLAB=true to use collaboration.");
+      return;
+    }
+    const warning =
+      "This feature relies on a backend server. Your file will no longer be sandboxed to this machine. Continue?";
+    if (!window.confirm(warning)) { setCollabStatus(""); return; }
+    setCollabStatus("Checking collaboration backend…");
+    if (!(await checkCollabHealth())) {
+      setCollabStatus("Collaboration backend is not responding.");
+      return;
+    }
+    setInitialContent(editorRef.current?.getValue() || initialContent || "");
+    const newDocId = generateDocId();
+    const nextSearch = new URLSearchParams(location.search);
+    nextSearch.set("doc", newDocId);
+    navigate({ pathname: location.pathname, search: nextSearch.toString() });
+    setCollabStatus("Session created. Share the link to collaborate.");
+  }
+
+  function handleAttributeSelection(attribute, isChecked) {
+    setOptimizationGoals((prev) => ({
+      ...prev,
+      [attribute]: { selected: isChecked, goal: prev[attribute]?.goal || "Minimize" },
+    }));
+  }
+
+  function handleGoalChange(attribute, newGoal) {
+    setOptimizationGoals((prev) => ({ ...prev, [attribute]: { ...prev[attribute], goal: newGoal } }));
+  }
+
+  function executeOptimization() {
+    const selectedGoals = Object.entries(optimizationGoals)
+      .filter(([, data]) => data.selected)
+      .map(([attribute, data]) => ({ attribute, goal: data.goal }));
+    if (selectedGoals.length === 0) {
+      setOutput({ label: "Optimization Error", result: "No attributes selected for optimization." });
+      return;
+    }
+    worker.postMessage({ action: "executeAttributeOptimization", data: selectedGoals });
+    setIsRunning(true);
+    setOutput({ label: "Attribute Optimization", result: "Executing operation" });
+    worker.onmessage = (event) => {
+      if (event.data.results !== undefined) {
+        setOutput(event.data.results);
+      } else if (event.data.error) {
+        setOutput({ label: "Attribute Optimization", result: "An exception occurred. Check the model definition." });
+      }
+      setIsRunning(false);
+    };
+    closeAttrOptModal();
+  }
+
+  function closeAttrOptModal() {
+    setIsAttrOptModalOpen(false);
+    setOptimizationGoals({});
+  }
+
+  // Navbar toolbar (injected via setNavControls)
   const toolbarContent = useMemo(() => {
     return (
       <div className="w-full flex justify-center">
         <div className="flex items-end gap-3 flex-nowrap overflow-x-auto overflow-visible px-3 py-1 bg-white/80 rounded shadow-sm">
+
           <div className="flex flex-col gap-1 whitespace-nowrap">
             <span className="text-[11px] text-gray-600 text-center w-full">View</span>
             <div className="h-px bg-gray-300 w-full" />
             <div className="flex rounded overflow-hidden border border-gray-300">
-              {viewOptions.map((option) => (
+              {VIEW_OPTIONS.map((option) => (
                 <button
                   key={option.value}
                   className={`px-2.5 py-2 text-sm ${
-                    currentView === option.value
-                      ? "bg-[#356C99] text-white"
-                      : "bg-white text-gray-700"
+                    currentView === option.value ? "bg-[#356C99] text-white" : "bg-white text-gray-700"
                   }`}
                   onClick={() => toggleView(option)}
                 >
@@ -140,10 +523,8 @@ function EditorPage({ selectedFile, setNavControls }) {
                 {solverOptions.map((option) => (
                   <button
                     key={option.value}
-                    className={`px-2.5 py-2 text-sm min-w-[110px] ${
-                      selectedSolver === option.value
-                        ? "bg-[#356C99] text-white"
-                        : "bg-white text-gray-700"
+                    className={`px-2.5 py-2 text-sm min-w-[60px] ${
+                      selectedSolver === option.value ? "bg-[#356C99] text-white" : "bg-white text-gray-700"
                     }`}
                     onClick={() => setSelectedSolver(option.value)}
                   >
@@ -153,8 +534,8 @@ function EditorPage({ selectedFile, setNavControls }) {
               </div>
               <div className="flex rounded overflow-hidden border border-gray-300">
                 <DropdownMenu
-                  buttonLabel={"Analysis operation"}
-                  options={solverOperations[selectedSolver]}
+                  buttonLabel="Analysis operation"
+                  options={ALL_SOLVER_OPERATIONS[selectedSolver] ?? []}
                   executeAction={executeAction}
                   className="bg-white text-gray-700 py-2 px-3 rounded-none shadow-none w-[170px] justify-between"
                 />
@@ -167,10 +548,10 @@ function EditorPage({ selectedFile, setNavControls }) {
             <div className="h-px bg-gray-300 w-full" />
             <div className="flex rounded overflow-hidden border border-gray-300">
               <DropdownMenu
-                buttonLabel={"Export"}
-                options={exportOperations}
+                buttonLabel="Export"
+                options={EXPORT_OPERATIONS}
                 executeAction={downloadFile}
-                className="bg-white text-gray-700 py-2 px-3 rounded-none shadow-none w-[150px] justify-between"
+                className="bg-white text-gray-700 py-2 px-3 rounded-none shadow-none w-[120px] justify-between"
               />
             </div>
           </div>
@@ -188,9 +569,7 @@ function EditorPage({ selectedFile, setNavControls }) {
                     Copy link
                   </button>
                 </div>
-                {copyMessage && (
-                  <span className="text-xs text-gray-600">{copyMessage}</span>
-                )}
+                {copyMessage && <span className="text-xs text-gray-600">{copyMessage}</span>}
               </div>
             </div>
           )}
@@ -207,512 +586,15 @@ function EditorPage({ selectedFile, setNavControls }) {
                     Collaborate
                   </button>
                 </div>
-                {collabStatus && (
-                  <span className="text-xs text-gray-600">{collabStatus}</span>
-                )}
+                {collabStatus && <span className="text-xs text-gray-600">{collabStatus}</span>}
               </div>
             </div>
           )}
         </div>
       </div>
     );
-  }, [
-    collabEnabled,
-    collabFeatureAvailable,
-    collabStatus,
-    copyMessage,
-    currentView,
-    downloadFile,
-    executeAction,
-    handleCopySessionLink,
-    handleStartCollab,
-    selectedSolver,
-    solverOperations,
-    solverOptions,
-    toggleView,
-    validateModel,
-    viewOptions,
-  ]);
-
-
-  function initializeWorker() {
-    const flamapyWorker = new Worker("/webworker.js");
-    flamapyWorker.onmessage = (event) => {
-      if (event.data.status === "loaded") {
-        setIsLoaded(true);
-        setOutput({
-          label: "Flamapy is ready",
-          result: "Here you will see the result of executing an operation",
-        });
-        if (selectedFile) setIsImported(false);
-      } else {
-        setOutput({
-          label: "Initialization exception",
-          result: `An exception has occurred when trying to initialize FlamapyIDE: ${event.data.exeption}`,
-        });
-      }
-    };
-    setWorker(flamapyWorker);
-    return flamapyWorker;
-  }
-
-  useEffect(() => {
-    try {
-      const flamapyWorker = initializeWorker();
-      return () => {
-        flamapyWorker.terminate();
-      };
-    } catch (error) {
-      setOutput({
-        label: "Initialization exception",
-        result: `An exception has occurred when trying to initialize FlamapyIDE: ${error.toString()}`,
-      });
-    }
-  }, []);
-
-  useEffect(() => {
-    if (selectedFile && isLoaded && !isImported) {
-      const reader = new FileReader();
-      const fileName = selectedFile.name;
-      const extensionIndexStart = fileName.indexOf(".") + 1;
-      const fileExtension = fileName.substring(
-        extensionIndexStart,
-        fileName.length
-      );
-      reader.onload = (e) => {
-        const fileContent = e.target.result;
-        setInitialContent(fileContent);
-        if (fileExtension === "uvl") {
-          editorRef.current.setValue(fileContent);
-          editorRef.current.layout();
-          setIsImported(true);
-        } else {
-          worker.postMessage({
-            action: "importModel",
-            data: { fileContent, fileExtension },
-          });
-
-          worker.onmessage = async (event) => {
-            if (event.data.results !== undefined) {
-              editorRef.current.setValue(event.data.results);
-              setInitialContent(event.data.results);
-              await editorRef.current.layout();
-              setIsImported(true);
-            } else if (event.data.error) {
-              if (event.data.error.includes("not_supported")) {
-                setOutput({
-                  label: "Import error",
-                  result: `The provided file extension is not a supported model. Please try with a model in one of the following types: .gfm.json, .afm, .fide, .json, .xml or .uvl`,
-                });
-              } else {
-                setOutput({
-                  label: "Import error",
-                  result: `There was an error when trying to import the model. Please make sure that the model is valid, and try again.`,
-                });
-              }
-              setIsImported(true);
-            }
-          };
-        }
-      };
-      reader.readAsText(selectedFile);
-    }
-  }, [isLoaded, worker, isImported, selectedFile]);
-
-  useEffect(() => {
-    if (validation?.valid) {
-      worker.postMessage({
-        action: "getFeatureTree",
-      });
-
-      worker.onmessage = (event) => {
-        if (event.data.results !== undefined) {
-          setFeatureTree(event.data.results);
-        }
-      };
-    }
-  }, [validation, worker]);
-
-  // eslint-disable-next-line no-unused-vars
-  const handleResize = (e, data) => {
-    e.preventDefault();
-    if (data.size.height !== lastOutputHeight) {
-      editorRef.current.layout({});
-      setLastOutputHeight(data.size.height);
-    }
-  };
-
-  function getConstraints(code) {
-    const startIndex = code.indexOf("constraints");
-    if (startIndex !== -1) {
-      const constraintsSection = code.substring(startIndex);
-
-      const constraintsLines = constraintsSection.split("\n").slice(1);
-
-      const constraints = constraintsLines
-        .map((line) => line.trim())
-        .filter((line) => line !== "");
-
-      return constraints;
-    } else {
-      return null;
-    }
-  }
-
-  // 🟢 FUNCIÓN NUEVA: Para obtener atributos numéricos del worker
-  async function get_attributes() {
-    if (!isLoaded) return null; // Asegura que el worker esté listo
-
-    return new Promise((resolve, reject) => {
-      // 1. Envía la acción al worker
-      worker.postMessage({ action: "getNumericalAttributes" });
-      
-      // 2. Define el manejador para la respuesta
-      worker.onmessage = (event) => {
-        if (event.data.results !== undefined) {
-          // Asumiendo que 'results' contiene la lista de atributos
-          resolve(event.data.results); 
-        } else if (event.data.error) {
-          setOutput({
-            label: "Attribute Extraction Error",
-            result: `Error getting numerical attributes: ${event.data.error}`,
-          });
-          reject(new Error("Worker error during attribute extraction"));
-        }
-      };
-    });
-  }
-
-  async function validateModel() {
-    if (isLoaded) {
-      const code = editorRef.current.getValue();
-      setInitialContent(code);
-      worker.postMessage({ action: "validateModel", data: code });
-
-      worker.onmessage = (event) => {
-        if (event.data.results !== undefined) {
-          setValidation(() => {
-            return event.data.results;
-          });
-          setConstraints(getConstraints(code));
-        } else if (event.data.error) {
-          setOutput({
-            label: "Validation error",
-            result: `An exception has occurred when trying to validate the model.\nTry restarting Flamapy by pressing on the stop button.`,
-          });
-        }
-      };
-    }
-  }
-
-  async function executeAction(action) {
-    if (isLoaded) {
-      if (validation == null) {
-        await validateModel();
-      }
-      if (validation.valid) {
-        if (action.value === "Z3AttributeOptimization") {
-          const attributes = await get_attributes();
-          setNumericalAttributes(attributes);
-          setIsAttributeOptimizationModalOpen(true);
-          return;
-        }
-        worker.postMessage({ action: "executeAction", data: action });
-        setIsRunning(true);
-        setOutput({ label: action.label, result: "Executing operation" });
-        worker.onmessage = (event) => {
-          if (event.data.results !== undefined) {
-            event.data.results.result = JSON.parse(event.data.results.result);
-            setOutput(event.data.results);
-          } else if (event.data.error) {
-            setOutput({
-              label: action.label,
-              result: `An exception has occurred when trying to execute the operation. Please check if the model is well defined.`,
-            });
-          }
-          setIsRunning(false);
-        };
-      } else {
-        setOutput({
-          label: action.label,
-          result:
-            "Error executing operation: the model is not valid. Check for syntax errors and retry once the model is valid",
-        });
-      }
-    }
-  }
-
-  async function executeActionWithConf(action, configuration) {
-    if (isLoaded) {
-      if (validation == null) {
-        await validateModel();
-      }
-      if (validation.valid) {
-        if (action.isOperationWithConf) {
-          worker.postMessage({
-            action: "executeActionWithConf",
-            data: { action, configuration },
-          });
-          setIsRunning(true);
-          setOutput({ label: action.label, result: "Executing operation" });
-          worker.onmessage = (event) => {
-            if (event.data.results !== undefined) {
-              setOutput(event.data.results);
-            } else if (event.data.error) {
-              setOutput({
-                label: action.label,
-                result: `An exception has occurred when trying to execute the operation. Please check if the model is well defined.`,
-              });
-            }
-            setIsRunning(false);
-          };
-        } else {
-          if (action.value === "configurator") {
-            toggleView(action);
-          } else if (action.value === "downloadConfigurator") {
-            const zip = new JSZip();
-
-            try {
-              // Fetch base ZIP
-              const response = await fetch("/assets/flamapy.conf.zip");
-              if (!response.ok) throw new Error("Failed to load base.zip");
-
-              const baseZipBlob = await response.blob();
-              const baseZipArrayBuffer = await baseZipBlob.arrayBuffer();
-
-              // Load the ZIP content
-              const baseZip = await JSZip.loadAsync(baseZipArrayBuffer);
-
-              // Copy contents from base ZIP into our new ZIP
-              baseZip.forEach((relativePath, file) => {
-                zip.file(relativePath, file.async("arraybuffer"));
-              });
-
-              // Add the feature model file
-              const featureModel = new File(
-                [editorRef.current.getValue()],
-                "FeatureModel.uvl",
-                { type: "text/plain" }
-              );
-              zip.file(`models/${featureModel.name}`, featureModel);
-
-              // Generate and trigger download
-              const newZipBlob = await zip.generateAsync({ type: "blob" });
-              saveAs(newZipBlob, "configurator.zip");
-            } catch (err) {
-              console.error("Error processing ZIP:", err);
-              alert("Failed to generate ZIP.");
-            }
-          }
-        }
-      } else {
-        setOutput({
-          label: action.label,
-          result:
-            "Error executing operation: the model is not valid. Check for syntax errors and retry once the model is valid",
-        });
-      }
-    }
-  }
-
-  function interruptExecution() {
-    if (isLoaded) {
-      worker.terminate();
-      setIsLoaded(false);
-      setIsRunning(false);
-      setOutput({
-        label: "Execution has been interrupted",
-        result: "Re-starting Flamapy...",
-      });
-      initializeWorker();
-    }
-  }
-
-  async function downloadFile(action) {
-    if (isLoaded) {
-      worker.postMessage({ action: "downloadFile", data: action });
-
-      worker.onmessage = (event) => {
-        if (event.data.results !== undefined) {
-          const file = new File([event.data.results], `model.${action.value}`, {
-            type: "text/plain;charset=utf-8",
-          });
-          saveAs(file);
-        } else if (event.data.error) {
-          setOutput({ label: "Export failed", result: event.data.error });
-        }
-      };
-    }
-  }
-
-  async function handleCopySessionLink() {
-    if (!collabEnabled || !docIdFromQuery) return;
-    const url = new URL(window.location.href);
-    url.searchParams.set("doc", docIdFromQuery);
-
-    try {
-      await navigator.clipboard.writeText(url.toString());
-      setCopyMessage("Session link copied");
-    } catch (err) {
-      setCopyMessage("Unable to copy link");
-      console.error("Clipboard error", err);
-    }
-
-    setTimeout(() => setCopyMessage(""), 2000);
-  }
-
-  const generateDocId = () => {
-    if (crypto?.randomUUID) return crypto.randomUUID();
-    return `doc-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-  };
-
-  async function checkCollabHealth() {
-    try {
-      const wsUrl = new URL(collabEndpoint);
-      const healthUrl = new URL(wsUrl);
-      healthUrl.protocol = wsUrl.protocol === "wss:" ? "https:" : "http:";
-      healthUrl.pathname = "/health";
-      const res = await fetch(healthUrl.toString(), { mode: "cors" });
-      return res.ok;
-    } catch (err) {
-      console.error("Health check failed", err);
-      return false;
-    }
-  }
-
-  async function handleStartCollab() {
-    if (!collabFeatureAvailable) {
-      setCollabStatus("Enable VITE_ENABLE_COLLAB=true to use collaboration.");
-      return;
-    }
-
-    const warning =
-      "This feature relies on a backend server. Your file will no longer be sandboxed to this machine, so consider privacy implications before proceeding. Continue?";
-    if (typeof window !== "undefined" && !window.confirm(warning)) {
-      setCollabStatus("");
-      return;
-    }
-
-    setCollabStatus("Checking collaboration backend…");
-    const healthy = await checkCollabHealth();
-    if (!healthy) {
-      setCollabStatus("Collaboration backend is not responding.");
-      return;
-    }
-
-    setInitialContent(editorRef.current?.getValue() || initialContent || "");
-    const newDocId = generateDocId();
-    const nextSearch = new URLSearchParams(location.search);
-    nextSearch.set("doc", newDocId);
-    navigate({ pathname: location.pathname, search: nextSearch.toString() });
-    setCollabStatus("Sesión creada. Puedes copiar el enlace.");
-  }
-
-  async function toggleView(option) {
-    if (isLoaded) {
-      if (validation == null) {
-        await validateModel();
-      }
-      if (validation?.valid) {
-        if (option.value === "configurator") {
-          setShowConfiguratorPanel(true);
-        }
-        setCurrentView(option.value);
-      } else {
-        if (option.value === "graph") {
-          setOutput({
-            label: "Visualize model",
-            result:
-              "The model is not valid. Check for syntax errors and retry once the model is valid",
-          });
-        } else if (option.value === "configurator") {
-          setOutput({
-            label: "Configure model",
-            result:
-              "The model is not valid. Check for syntax errors and retry once the model is valid",
-          });
-        }
-      }
-    }
-  }
-
-  // 🟢 FUNCIÓN NUEVA: Maneja el cambio del checkbox (seleccionar/deseleccionar)
-  function handleAttributeSelection(attribute, isChecked) {
-    setOptimizationGoals(prevGoals => {
-      // Si se selecciona, inicializa el goal a 'Minimize' por defecto
-      if (isChecked) {
-        return {
-          ...prevGoals,
-          [attribute]: { selected: true, goal: prevGoals[attribute]?.goal || 'Minimize' }
-        };
-      } else {
-        // Si se deselecciona, marca como no seleccionado (mantiene el goal anterior por si se vuelve a seleccionar)
-        return {
-          ...prevGoals,
-          [attribute]: { ...prevGoals[attribute], selected: false }
-        };
-      }
-    });
-  }
-
-  // 🟢 FUNCIÓN NUEVA: Maneja el cambio del selector (Minimize/Maximize)
-  function handleGoalChange(attribute, newGoal) {
-    setOptimizationGoals(prevGoals => ({
-      ...prevGoals,
-      [attribute]: { ...prevGoals[attribute], goal: newGoal }
-    }));
-  }
-
-  // 🟢 FUNCIÓN NUEVA: Maneja la acción final (ejecutar la optimización)
-  function executeOptimization() {
-    // 1. Filtra solo los atributos seleccionados
-    const selectedGoals = Object.entries(optimizationGoals)
-      .filter(([, data]) => data.selected)
-      .map(([attribute, data]) => ({ 
-          attribute: attribute, 
-          goal: data.goal 
-      }));
-
-    if (selectedGoals.length === 0) {
-        setOutput({ label: "Optimization Error", result: "No attributes selected for optimization." });
-        return;
-    }
-
-    // 2. Aquí iría la llamada al worker para ejecutar la operación de optimización
-    // Ejemplo: worker.postMessage({ action: "executeOptimization", data: selectedGoals });
-    worker.postMessage({ action: "executeAttributeOptimization", data: selectedGoals });
-        setIsRunning(true);
-        setOutput({ label: 'Attribute Optimization', result: "Executing operation" });
-        worker.onmessage = (event) => {
-          if (event.data.results !== undefined) {
-            console.log("Raw result from worker:", event.data.results);
-            //event.data.results.result = JSON.parse(event.data.results.result);
-            setOutput(event.data.results);
-          } else if (event.data.error) {
-            setOutput({
-              label: 'Attribute Optimization',
-              result: `An exception has occurred when trying to execute the operation. Please check if the model is well defined.`,
-            });
-          }
-          setIsRunning(false);
-        };
-    
-    // 3. Muestra el resultado de la selección en la consola (temporalmente)
-    setOutput({
-      label: "Optimization Configuration",
-      result: JSON.stringify(selectedGoals, null, 2)
-    });
-    
-    // 4. Cierra el modal
-    closeAttributeOptimizationModal();
-  }
-
-  // 🟢 FUNCIÓN NUEVA: Para cerrar el modal
-  function closeAttributeOptimizationModal() {
-    setIsAttributeOptimizationModalOpen(false);
-    // Limpia el estado de selección al cerrar el modal.
-    setOptimizationGoals({});
-  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [collabEnabled, collabFeatureAvailable, collabStatus, copyMessage, currentView, selectedSolver, solverOptions]);
 
   useEffect(() => {
     if (setNavControls) {
@@ -723,17 +605,11 @@ function EditorPage({ selectedFile, setNavControls }) {
 
   return (
     <div className="flex-1 overflow-hidden flex flex-col">
-      {/* Top Section */}
-
       <div className="flex flex-row flex-grow p-2 gap-2 overflow-hidden relative items-stretch">
-        {/* Left Side Panel */}
+
         {showConfiguratorPanel && (
           <div className="relative h-full">
-            <TreeView
-              treeData={featureTree}
-              executeAction={executeActionWithConf}
-              history={history}
-            />
+            <TreeView treeData={featureTree} executeAction={executeActionWithConf} history={history} />
             {currentView !== "configurator" && (
               <button
                 className="absolute right-[-12px] top-1/2 -translate-y-1/2 bg-gray-300 text-gray-700 text-[10px] px-1 py-10 rounded-r shadow hover:bg-gray-400 rotate-180 [writing-mode:vertical-rl]"
@@ -753,9 +629,7 @@ function EditorPage({ selectedFile, setNavControls }) {
           </button>
         )}
 
-        {/* Center Section (Text Editor/Feature Model + Bottom Panel) */}
         <div className="flex flex-1 flex-col">
-          {/* Text Editor or feature model */}
           <UVLEditor
             editorRef={editorRef}
             validateModel={validateModel}
@@ -764,14 +638,22 @@ function EditorPage({ selectedFile, setNavControls }) {
             collabConfig={collabConfig}
           />
           {currentView === "graph" && (
-            <FeatureModelVisualization
-              treeData={featureTree}
-              constraints={constraints}
-            />
+            <FeatureModelVisualization treeData={featureTree} constraints={constraints} />
           )}
-          {currentView === "configurator" && <Wizzard worker={worker} setHistory={setHistory} />}
+          {currentView === "configdist" && (
+            <div className="flex-1 overflow-auto">
+              <ProductDistributionChart data={configDistData} />
+            </div>
+          )}
+          {currentView === "fip" && (
+            <div className="flex-1 overflow-auto">
+              <FeatureInclusionProbabilitiesChart data={fipData} />
+            </div>
+          )}
+          {currentView === "configurator" && (
+            <Wizzard worker={worker} setHistory={setHistory} />
+          )}
 
-          {/* Bottom Panel */}
           <ExecutionOutput
             handleResize={handleResize}
             handleStop={interruptExecution}
@@ -780,19 +662,14 @@ function EditorPage({ selectedFile, setNavControls }) {
             {output}
           </ExecutionOutput>
         </div>
-        {/* Right Side Panel */}
-        <ModelInformation
-          onValidateModel={validateModel}
-          validation={validation}
-        />
+
+        <ModelInformation onValidateModel={validateModel} validation={validation} />
       </div>
 
-      {/* 🟢 NUEVO: Implementación del Modal */}
-      {isAttributeOptimizationModalOpen && (
+      {isAttrOptModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-75">
           <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full mx-4 p-6">
-            <h3 className="text-xl font-bold mb-4 text-gray-800">Select Optimization Goals</h3> 
-            
+            <h3 className="text-xl font-bold mb-4 text-gray-800">Select Optimization Goals</h3>
             <div className="max-h-96 overflow-y-auto border border-gray-300 bg-gray-50 p-3 rounded">
               {numericalAttributes && numericalAttributes.length > 0 ? (
                 <table className="min-w-full divide-y divide-gray-200">
@@ -806,8 +683,7 @@ function EditorPage({ selectedFile, setNavControls }) {
                   <tbody className="divide-y divide-gray-200">
                     {numericalAttributes.map((attribute) => {
                       const isSelected = optimizationGoals[attribute]?.selected || false;
-                      const goal = optimizationGoals[attribute]?.goal || 'Minimize';
-                      
+                      const goal = optimizationGoals[attribute]?.goal || "Minimize";
                       return (
                         <tr key={attribute}>
                           <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900">
@@ -824,9 +700,11 @@ function EditorPage({ selectedFile, setNavControls }) {
                           <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-500">
                             <select
                               value={goal}
-                              disabled={!isSelected} // Deshabilita el selector si no está seleccionado
+                              disabled={!isSelected}
                               onChange={(e) => handleGoalChange(attribute, e.target.value)}
-                              className={`mt-1 block w-full py-1 px-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm ${!isSelected ? 'bg-gray-200 text-gray-500' : 'bg-white'}`}
+                              className={`mt-1 block w-full py-1 px-2 border border-gray-300 rounded-md shadow-sm sm:text-sm ${
+                                !isSelected ? "bg-gray-200 text-gray-500" : "bg-white"
+                              }`}
                             >
                               <option value="Minimize">Minimize</option>
                               <option value="Maximize">Maximize</option>
@@ -838,21 +716,18 @@ function EditorPage({ selectedFile, setNavControls }) {
                   </tbody>
                 </table>
               ) : (
-                <p className="text-sm text-red-500">
-                  ⚠️ No hay atributos numéricos disponibles o la operación falló.
-                </p>
+                <p className="text-sm text-red-500">No numerical attributes available in this model.</p>
               )}
             </div>
-            
             <div className="mt-6 flex justify-end space-x-3">
               <button
-                className="px-4 py-2 bg-gray-300 text-gray-800 font-semibold rounded-md hover:bg-gray-400 transition duration-150"
-                onClick={closeAttributeOptimizationModal}
+                className="px-4 py-2 bg-gray-300 text-gray-800 font-semibold rounded-md hover:bg-gray-400"
+                onClick={closeAttrOptModal}
               >
                 Cancel
               </button>
               <button
-                className="px-4 py-2 bg-green-600 text-white font-semibold rounded-md hover:bg-green-700 transition duration-150"
+                className="px-4 py-2 bg-green-600 text-white font-semibold rounded-md hover:bg-green-700"
                 onClick={executeOptimization}
               >
                 Execute Optimization

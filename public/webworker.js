@@ -5,7 +5,7 @@ async function loadFlamapyWorker() {
   await self.flamapy.loadFlamapy();
 }
 let flamapyReadyPromise = loadFlamapyWorker()
-  .then(() => self.postMessage({ status: "loaded" }))
+  .then(() => self.postMessage({ status: "loaded", pluginsConfig: self.flamapy.getPluginsConfig() }))
   .catch((exception) => self.postMessage({ status: "error", exception }));
 
 self.onmessage = async (event) => {
@@ -32,12 +32,16 @@ self.onmessage = async (event) => {
     } else if (action === "getFeatures") {
       results = await self.flamapy.getFeatures();
     } else if (action === "getNumericalAttributes") {
-      results = await self.flamapy.getNumericalAttributes();
-      // 2. 🟢 PASO CLAVE: Convertir el objeto complejo a una cadena JSON
-      const json_string = JSON.stringify(results);
-      // 3. 🟢 PASO CLAVE: Convertir la cadena JSON a un objeto simple de JavaScript
-      const clean_js_object = JSON.parse(json_string);
-      results = clean_js_object;
+      const raw = await self.flamapy.getNumericalAttributes();
+      results = JSON.parse(JSON.stringify(raw));
+    } else if (action === "getConfigurationDistribution") {
+      const proxy = await self.flamapy.getConfigurationDistribution();
+      results = proxy.toJs({ dict_converter: Object.fromEntries });
+      if (proxy.destroy) proxy.destroy();
+    } else if (action === "getFeatureInclusionProbabilities") {
+      const proxy = await self.flamapy.getFeatureInclusionProbabilities();
+      results = proxy.toJs({ dict_converter: Object.fromEntries });
+      if (proxy.destroy) proxy.destroy();
     } else if (action === "executeActionWithConf") {
       results = await self.flamapy.executeActionWithConf(data);
     } else if (action === "executeAttributeOptimization") {
