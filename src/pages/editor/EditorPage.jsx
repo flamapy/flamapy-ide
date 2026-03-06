@@ -543,7 +543,7 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
                   buttonLabel="Metrics"
                   options={metricsOptions}
                   executeAction={toggleView}
-                  className="bg-white text-gray-700 py-2 px-3 rounded-none shadow-none w-[100px] justify-between border-l border-gray-300"
+                  className="bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 py-2 px-3 rounded-none shadow-none w-[100px] justify-between border-l border-gray-300 dark:border-gray-600"
                 />
               )}
             </div>
@@ -558,7 +558,7 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
                   <button
                     key={option.value}
                     className={`px-2.5 py-2 text-sm min-w-[60px] ${
-                      selectedSolver === option.value ? "bg-[#356C99] text-white" : "bg-white text-gray-700"
+                      selectedSolver === option.value ? "bg-[#356C99] text-white" : "bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200"
                     }`}
                     onClick={() => setSelectedSolver(option.value)}
                   >
@@ -571,7 +571,7 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
                   buttonLabel="Analysis operation"
                   options={ALL_SOLVER_OPERATIONS[selectedSolver] ?? []}
                   executeAction={executeAction}
-                  className="bg-white text-gray-700 py-2 px-3 rounded-none shadow-none w-[170px] justify-between"
+                  className="bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 py-2 px-3 rounded-none shadow-none w-[170px] justify-between"
                 />
               </div>
             </div>
@@ -585,7 +585,7 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
                 buttonLabel="Export"
                 options={EXPORT_OPERATIONS}
                 executeAction={downloadFile}
-                className="bg-white text-gray-700 py-2 px-3 rounded-none shadow-none w-[120px] justify-between"
+                className="bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 py-2 px-3 rounded-none shadow-none w-[120px] justify-between"
               />
             </div>
           </div>
@@ -602,41 +602,41 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
                   Copy model link
                 </button>
               </div>
-              {shareMessage && <span className="text-xs text-gray-600">{shareMessage}</span>}
+              {shareMessage && <span className="text-xs text-gray-600 dark:text-gray-300">{shareMessage}</span>}
             </div>
           </div>
 
           {collabEnabled && (
             <div className="flex flex-col gap-1 whitespace-nowrap">
-              <span className="text-[11px] text-gray-600 text-center w-full">Collaborate</span>
-              <div className="h-px bg-gray-300 w-full" />
+              <span className="text-[11px] text-gray-600 dark:text-gray-300 text-center w-full">Collaborate</span>
+              <div className="h-px bg-gray-300 dark:bg-gray-600 w-full" />
               <div className="flex items-end gap-1">
                 <div className="flex rounded overflow-hidden border border-gray-300">
                   <button
-                    className="px-2.5 py-2 text-sm bg-white text-gray-700 hover:bg-gray-100"
+                    className="px-2.5 py-2 text-sm bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600"
                     onClick={handleCopySessionLink}
                   >
                     Copy link
                   </button>
                 </div>
-                {copyMessage && <span className="text-xs text-gray-600">{copyMessage}</span>}
+                {copyMessage && <span className="text-xs text-gray-600 dark:text-gray-300">{copyMessage}</span>}
               </div>
             </div>
           )}
           {!collabEnabled && collabFeatureAvailable && (
             <div className="flex flex-col gap-1 whitespace-nowrap">
-              <span className="text-[11px] text-gray-600 text-center w-full">Collaborate</span>
-              <div className="h-px bg-gray-300 w-full" />
+              <span className="text-[11px] text-gray-600 dark:text-gray-300 text-center w-full">Collaborate</span>
+              <div className="h-px bg-gray-300 dark:bg-gray-600 w-full" />
               <div className="flex items-end gap-1">
                 <div className="flex rounded overflow-hidden border border-gray-300">
                   <button
-                    className="px-2.5 py-2 text-sm bg-white text-gray-700 hover:bg-gray-100"
+                    className="px-2.5 py-2 text-sm bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600"
                     onClick={handleStartCollab}
                   >
                     Collaborate
                   </button>
                 </div>
-                {collabStatus && <span className="text-xs text-gray-600">{collabStatus}</span>}
+                {collabStatus && <span className="text-xs text-gray-600 dark:text-gray-300">{collabStatus}</span>}
               </div>
             </div>
           )}
@@ -662,7 +662,7 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
             <TreeView treeData={featureTree} executeAction={executeActionWithConf} history={history} />
             {currentView !== "configurator" && (
               <button
-                className="absolute right-[-12px] top-1/2 -translate-y-1/2 bg-gray-300 text-gray-700 text-[10px] px-1 py-10 rounded-r shadow hover:bg-gray-400 rotate-180 [writing-mode:vertical-rl]"
+                className="absolute right-[-12px] top-1/2 -translate-y-1/2 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 text-[10px] px-1 py-10 rounded-r shadow hover:bg-gray-400 dark:hover:bg-gray-500 rotate-180 [writing-mode:vertical-rl]"
                 onClick={() => setShowConfiguratorPanel(false)}
               >
                 Hide configuration panel
@@ -672,7 +672,7 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
         )}
         {!showConfiguratorPanel && currentView !== "configurator" && (
           <button
-            className="absolute left-0 top-1/2 -translate-y-1/2 bg-gray-300 text-gray-700 text-[10px] px-1 py-10 rounded-r shadow hover:bg-gray-400 z-40 rotate-180 [writing-mode:vertical-rl]"
+            className="absolute left-0 top-1/2 -translate-y-1/2 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 text-[10px] px-1 py-10 rounded-r shadow hover:bg-gray-400 dark:hover:bg-gray-500 z-40 rotate-180 [writing-mode:vertical-rl]"
             onClick={() => setShowConfiguratorPanel(true)}
           >
             Show configuration panel
@@ -724,25 +724,25 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
 
       {isAttrOptModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-75">
-          <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full mx-4 p-6">
-            <h3 className="text-xl font-bold mb-4 text-gray-800">Select Optimization Goals</h3>
-            <div className="max-h-96 overflow-y-auto border border-gray-300 bg-gray-50 p-3 rounded">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-3xl w-full mx-4 p-6">
+            <h3 className="text-xl font-bold mb-4 text-gray-800 dark:text-gray-200">Select Optimization Goals</h3>
+            <div className="max-h-96 overflow-y-auto border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 p-3 rounded">
               {numericalAttributes && numericalAttributes.length > 0 ? (
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-100 sticky top-0">
+                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                  <thead className="bg-gray-100 dark:bg-gray-700 sticky top-0">
                     <tr>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Optimize</th>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Attribute</th>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Goal</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Optimize</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Attribute</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Goal</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-200">
+                  <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                     {numericalAttributes.map((attribute) => {
                       const isSelected = optimizationGoals[attribute]?.selected || false;
                       const goal = optimizationGoals[attribute]?.goal || "Minimize";
                       return (
                         <tr key={attribute}>
-                          <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900">
+                          <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
                             <input
                               type="checkbox"
                               checked={isSelected}
@@ -750,16 +750,16 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
                               className="h-4 w-4 text-blue-600 border-gray-300 rounded"
                             />
                           </td>
-                          <td className="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-900">
+                          <td className="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
                             {attribute}
                           </td>
-                          <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-500">
+                          <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                             <select
                               value={goal}
                               disabled={!isSelected}
                               onChange={(e) => handleGoalChange(attribute, e.target.value)}
-                              className={`mt-1 block w-full py-1 px-2 border border-gray-300 rounded-md shadow-sm sm:text-sm ${
-                                !isSelected ? "bg-gray-200 text-gray-500" : "bg-white"
+                              className={`mt-1 block w-full py-1 px-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm sm:text-sm ${
+                                !isSelected ? "bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400" : "bg-white dark:bg-gray-600 dark:text-gray-200"
                               }`}
                             >
                               <option value="Minimize">Minimize</option>
@@ -777,7 +777,7 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
             </div>
             <div className="mt-6 flex justify-end space-x-3">
               <button
-                className="px-4 py-2 bg-gray-300 text-gray-800 font-semibold rounded-md hover:bg-gray-400"
+                className="px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-800 dark:text-gray-200 font-semibold rounded-md hover:bg-gray-400 dark:hover:bg-gray-500"
                 onClick={closeAttrOptModal}
               >
                 Cancel

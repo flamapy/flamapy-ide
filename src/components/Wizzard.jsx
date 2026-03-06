@@ -5,7 +5,7 @@ import Question from "./Question";
 import Information from "./Information";
 import Configuration from "./Configuration";
 
-function Wizzard({ worker, setHistory }) {
+function Wizzard({ call, setHistory }) {
   const cancelURL = import.meta.env?.VITE_CANCEL_CONFIGURATION_URL;
   const applyURL = import.meta.env?.VITE_APPLY_CONFIGURATION_URL;
 
@@ -19,76 +19,51 @@ function Wizzard({ worker, setHistory }) {
   const [configuration, setConfiguration] = useState(null);
 
   useEffect(() => {
-    worker.postMessage({
-      action: "startConfigurator",
-      data: null,
+    call("startConfigurator").then((result) => {
+      setMessage(null);
+      setCurrentQuestion(result);
+      setHistory(result.history);
+      setIsImported(true);
     });
-
-    worker.onmessage = async (event) => {
-      if (event.data.results !== undefined) {
-        setMessage(null);
-        setCurrentQuestion(event.data.results);
-        setHistory(event.data.results.history);
-        setIsImported(true);
-      }
-    };
-
-    return () => setHistory(null)
-  }, [worker]);
+    return () => setHistory(null);
+  // call is stable (useCallback), so this runs once on mount
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function answerQuestion() {
-    if (isImported) {
-      worker.postMessage({ action: "answerQuestion", data: selectedAnswer });
-
-      worker.onmessage = async (event) => {
-        if (event.data.results !== undefined) {
-          const results = event.data.results;
-          if (results.valid) {
-            if (results.configuration) {
-              setConfiguration(results.configuration);
-              setMessage({
-                type: "success",
-                msg: "Configuration finished successfully",
-              });
-              setCurrentQuestion(null);
-            } else {
-              setCurrentQuestion(event.data.results.nextQuestion);
-              setMessage(null);
-            }
-            setHistory(event.data.results.history);
-          } else {
-            setMessage({ type: "error", msg: results.contradiction.msg });
-          }
-          setSelectedAnswer([]);
-        }
-      };
+    if (!isImported) return;
+    const results = await call("answerQuestion", selectedAnswer);
+    if (results.valid) {
+      if (results.configuration) {
+        setConfiguration(results.configuration);
+        setMessage({ type: "success", msg: "Configuration finished successfully" });
+        setCurrentQuestion(null);
+      } else {
+        setCurrentQuestion(results.nextQuestion);
+        setMessage(null);
+      }
+      setHistory(results.history);
+    } else {
+      setMessage({ type: "error", msg: results.contradiction.msg });
     }
+    setSelectedAnswer([]);
   }
 
   async function undoAnswer() {
-    if (isImported) {
-      worker.postMessage({ action: "undoAnswer" });
-
-      worker.onmessage = async (event) => {
-        const results = event.data.results;
-        setCurrentQuestion(results);
-        if (configuration) setConfiguration(null);
-        setSelectedAnswer([]);
-        setMessage(null)
-        setHistory(event.data.results.history);
-      };
-    }
+    if (!isImported) return;
+    const results = await call("undoAnswer");
+    setCurrentQuestion(results);
+    if (configuration) setConfiguration(null);
+    setSelectedAnswer([]);
+    setMessage(null);
+    setHistory(results.history);
   }
 
   function downloadConfiguration() {
     if (!configuration) {
-      setMessage({
-        type: "error",
-        msg: "No configuration available to download.",
-      });
+      setMessage({ type: "error", msg: "No configuration available to download." });
       return;
     }
-
     const jsonData = JSON.stringify(configuration, null, 2);
     const blob = new Blob([jsonData], { type: "application/json" });
     const link = document.createElement("a");
@@ -113,14 +88,10 @@ function Wizzard({ worker, setHistory }) {
     }
   }
 
-  async function restartConfigurator() {
-    return true;
-  }
-
   return (
     <div className="flex-1 overflow-hidden flex flex-col">
       {/* Main content area */}
-      <div className="bg-neutral-300 flex flex-col flex-grow rounded-2xl m-2 p-4 overflow-auto">
+      <div className="bg-neutral-300 dark:bg-gray-700 flex flex-col flex-grow rounded-2xl m-2 p-4 overflow-auto">
         {message && <Information type={message.type} msg={message.msg} />}
         {currentQuestion && (
           <Question
@@ -137,20 +108,10 @@ function Wizzard({ worker, setHistory }) {
       {/* Footer with buttons */}
       <div className="flex justify-between p-4">
         <div>
-          <CustomButton
-            active={isImported}
-            onClick={() => {
-              previousQuestion();
-            }}
-          >
+          <CustomButton active={isImported} onClick={previousQuestion}>
             Previous
           </CustomButton>
-          <CustomButton
-            active={isImported}
-            onClick={() => {
-              nextQuestion();
-            }}
-          >
+          <CustomButton active={isImported} onClick={nextQuestion}>
             {configuration
               ? applyURL
                 ? "Apply configuration"

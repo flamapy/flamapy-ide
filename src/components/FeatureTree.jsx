@@ -45,12 +45,12 @@ const TreeNode = ({ node, statusMap, setStatusMap, history }) => {
 
   return (
     <div className="ml-4 mt-2 space-y-1">
-      <div className="flex justify-between items-center bg-white rounded px-2 py-1 shadow-sm hover:shadow-md transition-shadow">
+      <div className="flex justify-between items-center bg-white dark:bg-gray-800 rounded px-2 py-1 shadow-sm hover:shadow-md transition-shadow">
         <div className="flex items-center gap-2">
           {node.children && (
             <button
               onClick={handleExpandToggle}
-              className={`text-sm px-1 rounded bg-gray-300 hover:bg-gray-400 transition-colors ${history ? 'disabled': ''}`}
+              className={`text-sm px-1 rounded bg-gray-300 dark:bg-gray-600 hover:bg-gray-400 dark:hover:bg-gray-500 transition-colors ${history ? 'disabled': ''}`}
               aria-label="Toggle expand"
             >
               {isExpanded ? "−" : "+"}
@@ -58,7 +58,7 @@ const TreeNode = ({ node, statusMap, setStatusMap, history }) => {
           )}
           <div
             className={`font-medium cursor-default ${
-              node.children ? "text-blue-700" : "text-black"
+              node.children ? "text-blue-700 dark:text-blue-400" : "text-black dark:text-gray-200"
             }`}
           >
             {node.name}
@@ -77,7 +77,7 @@ const TreeNode = ({ node, statusMap, setStatusMap, history }) => {
       </div>
 
       {isExpanded && node.children && (
-        <div className="ml-2 border-l border-gray-300 pl-2">
+        <div className="ml-2 border-l border-gray-300 dark:border-gray-600 pl-2">
           {node.children.map((child, i) => (
             <TreeNode
               key={`${node.name}-${i}`}
@@ -138,7 +138,7 @@ const TreeView = ({ treeData, executeAction, history }) => {
       axis="x"
       minConstraints={[200, panelHeight]}
       maxConstraints={[500, panelHeight]}
-      className="bg-neutral-300 text-neutral-900 p-4 resize-handle-right rounded-lg overflow-auto relative shadow-md h-full"
+      className="bg-neutral-300 dark:bg-gray-700 text-neutral-900 dark:text-gray-100 p-4 resize-handle-right rounded-lg overflow-auto relative shadow-md h-full"
       handle={
         <div className="absolute right-0 top-0 h-full w-2 cursor-ew-resize z-20" />
       }
