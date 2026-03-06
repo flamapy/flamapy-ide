@@ -57,7 +57,7 @@ const EXPORT_OPERATIONS = [
   { label: "Download UVL", value: "uvl" },
 ];
 
-function EditorPage({ selectedFile, setNavControls }) {
+function EditorPage({ selectedFile, setNavControls, darkMode }) {
   const location = useLocation();
   const navigate = useNavigate();
   const searchParams = new URLSearchParams(location.search);
@@ -687,6 +687,7 @@ function EditorPage({ selectedFile, setNavControls }) {
             hide={currentView !== "source"}
             collabConfig={collabConfig}
             onEditorMount={() => setIsEditorReady(true)}
+            darkMode={darkMode}
           />
           {currentView === "graph" && (
             <FeatureModelVisualization treeData={featureTree} constraints={constraints} />

@@ -13,8 +13,10 @@ function UVLEditor({
   hide,
   collabConfig,
   onEditorMount,
+  darkMode,
 }) {
   const collabRefs = useRef({ provider: null, ydoc: null });
+  const monacoRef = useRef(null);
 
   useEffect(() => {
     return () => {
@@ -23,8 +25,16 @@ function UVLEditor({
     };
   }, []);
 
+  useEffect(() => {
+    if (monacoRef.current) {
+      monacoRef.current.editor.setTheme(darkMode ? "vs-dark" : "vs");
+    }
+  }, [darkMode]);
+
   function handleEditorDidMount(editor, monaco) {
     editorRef.current = editor;
+    monacoRef.current = monaco;
+    monaco.editor.setTheme(darkMode ? "vs-dark" : "vs");
     onEditorMount?.();
     monaco.languages.register({ id: "uvl" });
 
@@ -202,6 +212,7 @@ function UVLEditor({
           key={collabConfig?.enabled ? `collab-${collabConfig.docId}` : "solo"}
           defaultLanguage="uvl"
           defaultValue={collabConfig?.enabled ? "" : defaultCode}
+          theme={darkMode ? "vs-dark" : "vs"}
           onMount={handleEditorDidMount}
           onChange={validateModel}
           options={{

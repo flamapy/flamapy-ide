@@ -75,7 +75,7 @@ function App() {
           <Route path="/" element={<Home setSelectedFile={setSelectedFile} />} />
           <Route
             path="/editor"
-            element={<EditorPage selectedFile={selectedFile} setNavControls={setNavControls} />}
+            element={<EditorPage selectedFile={selectedFile} setNavControls={setNavControls} darkMode={darkMode} />}
           />
           <Route path="/how-to-cite-us" element={<HowToCiteUs />} />
           <Route path="/privacy" element={<PrivacyPolicy />} />
