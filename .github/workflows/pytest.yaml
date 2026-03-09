@@ -20,9 +20,9 @@ jobs:
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
+          python -m pip install --upgrade pip setuptools wheel
           pip install -r requirements.txt
-          pip install public/flamapy/flamapy_configurator-2.0.1-py3-none-any.whl
+          pip install --no-deps public/flamapy/flamapy_configurator-2.0.1-py3-none-any.whl
 
       - name: Run tests
         run: |
