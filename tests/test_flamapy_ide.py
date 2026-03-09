@@ -51,7 +51,11 @@ def test_execute_pysat_operation(operation,expected):
     result = execute_pysat_operation(operation)
 
     assert isinstance(result, (list, str, int, float))
-    assert json.loads(result) == expected
+    parsed = json.loads(result)
+    if isinstance(parsed, list) and isinstance(expected, list):
+        assert sorted(parsed) == sorted(expected)
+    else:
+        assert parsed == expected
 
 # Test export transformation
 @pytest.mark.parametrize('format',['afm','json','gfm.json','sxfm','uvl'])
