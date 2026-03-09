@@ -1,8 +1,10 @@
-flamapy==2.0.1
-./public/flamapy/flamapy_fw-2.0.2.dev0-py3-none-any.whl
-./public/flamapy/flamapy_fm-2.0.2.dev0-py3-none-any.whl
-./public/flamapy/flamapy_configurator-2.0.1-py3-none-any.whl
-flamapy_sat==2.0.1
-flamapy_bdd==2.0.1
+flamapy==2.5.0
+flamapy-fw==2.5.0
+flamapy-fm==2.5.0
+# flamapy-configurator is not on PyPI; install the vendored wheel manually:
+#   pip install public/flamapy/flamapy_configurator-2.0.1-py3-none-any.whl
+flamapy-sat==2.5.0
+flamapy-bdd==2.5.0
+flamapy-z3==2.5.0
 pytest==8.3.3
 pytest-cov==5.0.0

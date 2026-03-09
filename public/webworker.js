@@ -10,10 +10,7 @@ let flamapyReadyPromise = loadFlamapyWorker()
 
 self.onmessage = async (event) => {
   await flamapyReadyPromise;
-  const { action, data, ...context } = event.data;
-  for (const key of Object.keys(context)) {
-    self[key] = context[key];
-  }
+  const { action, data, msgId } = event.data;
   try {
     let results;
     if (action === "validateModel") {
@@ -54,9 +51,9 @@ self.onmessage = async (event) => {
       results = await self.flamapy.undoAnswer();
     }
 
-    self.postMessage({ results, action });
+    self.postMessage({ results, action, msgId });
   } catch (error) {
     console.error(error);
-    self.postMessage({ error: error.message, action });
+    self.postMessage({ error: error.message, action, msgId });
   }
 };

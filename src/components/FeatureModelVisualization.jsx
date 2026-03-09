@@ -1,7 +1,6 @@
 /* eslint-disable react/prop-types */
 import { useEffect, useState, useRef } from "react";
 import Tree from "react-d3-tree";
-import { elementToSVG } from "dom-to-svg";
 
 // Function to draw an arc between the children
 const drawSemicircle = (rectWidth, rectHeight, isAlternative, isCardinalityGroup, card_min, card_max) => {
@@ -167,9 +166,9 @@ export default function FeatureModelVisualization({ treeData, constraints }) {
       path.setAttribute("fill", "none");
     });
 
-    const svgDocument = elementToSVG(svgRef.current);
+    svgElement.setAttribute("xmlns", "http://www.w3.org/2000/svg");
 
-    const svgData = new XMLSerializer().serializeToString(svgDocument);
+    const svgData = new XMLSerializer().serializeToString(svgElement);
     const svgBlob = new Blob([svgData], {
       type: "image/svg+xml;charset=utf-8",
     });
