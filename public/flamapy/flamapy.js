@@ -39,7 +39,7 @@ class Flamapy {
     }
 
     const installStatements = allWheels
-      .map((w) => `  await micropip.install("flamapy/${w}", deps=False)`)
+      .map((w) => `await micropip.install("flamapy/${w}", deps=False)`)
       .join("\n");
 
     await pyodideInstance.runPythonAsync(`

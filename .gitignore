@@ -35,3 +35,6 @@ CLAUDE.md
 # Local environment variables
 .env
 .env.example
+
+# start_coding.sh local environments
+start_coding.sh
