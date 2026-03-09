@@ -1,4 +1,5 @@
-import React, { useRef } from 'react';
+import { useRef } from 'react';
+import PropTypes from 'prop-types';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -151,6 +152,14 @@ const FeatureInclusionProbabilitiesChart = ({ data }) => {
       </div>
     </div>
   );
+};
+
+FeatureInclusionProbabilitiesChart.propTypes = {
+  data: PropTypes.shape({
+    x: PropTypes.array,
+    y: PropTypes.array,
+    colors: PropTypes.oneOfType([PropTypes.array, PropTypes.string]),
+  }),
 };
 
 export default FeatureInclusionProbabilitiesChart;

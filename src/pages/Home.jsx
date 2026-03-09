@@ -6,7 +6,6 @@ function Home({ setSelectedFile }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [fetchError, setFetchError] = useState(false);
-  const [importURL, setImportURL] = useState(null);
   const [showModelList, setShowModelList] = useState(false);
 
   const predefinedModels = [
@@ -21,7 +20,6 @@ function Home({ setSelectedFile }) {
     const searchParams = new URLSearchParams(location.search);
     if (searchParams.has("import")) {
       const url = searchParams.get("import");
-      setImportURL(url);
 
       fetch(url)
         .then((response) => {
@@ -52,6 +50,7 @@ function Home({ setSelectedFile }) {
           setFetchError(true);
         });
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleFileChange = (event) => {
