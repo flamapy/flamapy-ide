@@ -551,28 +551,24 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
           <div className="flex flex-col gap-1 whitespace-nowrap">
             <span className="text-[11px] text-gray-600 dark:text-gray-300 text-center w-full">Automated analysis</span>
             <div className="h-px bg-gray-300 dark:bg-gray-600 w-full" />
-            <div className="flex items-end gap-1">
-              <div className="flex rounded overflow-hidden border border-gray-300">
-                {solverOptions.map((option) => (
-                  <button
-                    key={option.value}
-                    className={`px-2.5 py-2 text-sm min-w-[60px] ${
-                      selectedSolver === option.value ? "bg-[#356C99] text-white" : "bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200"
-                    }`}
-                    onClick={() => setSelectedSolver(option.value)}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-              </div>
-              <div className="flex rounded overflow-hidden border border-gray-300">
-                <DropdownMenu
-                  buttonLabel="Analysis operation"
-                  options={ALL_SOLVER_OPERATIONS[selectedSolver] ?? []}
-                  executeAction={executeAction}
-                  className="bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 py-2 px-3 rounded-none shadow-none w-[170px] justify-between"
-                />
-              </div>
+            <div className="flex items-stretch rounded overflow-hidden border border-gray-300 dark:border-gray-600">
+              {solverOptions.map((option) => (
+                <button
+                  key={option.value}
+                  className={`px-2.5 py-2 text-sm min-w-[60px] ${
+                    selectedSolver === option.value ? "bg-[#356C99] text-white" : "bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200"
+                  }`}
+                  onClick={() => setSelectedSolver(option.value)}
+                >
+                  {option.label}
+                </button>
+              ))}
+              <DropdownMenu
+                buttonLabel="Analysis operation"
+                options={ALL_SOLVER_OPERATIONS[selectedSolver] ?? []}
+                executeAction={executeAction}
+                className="bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 py-2 px-3 rounded-none shadow-none w-[170px] justify-between border-l"
+              />
             </div>
           </div>
 
@@ -595,7 +591,7 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
             <div className="flex items-end gap-1">
               <div className="flex rounded overflow-hidden border border-gray-300 dark:border-gray-600">
                 <button
-                  className="px-2.5 py-2 text-sm bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600"
+                  className="py-2 px-3 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600"
                   onClick={handleCopyModelLink}
                 >
                   Copy model link
