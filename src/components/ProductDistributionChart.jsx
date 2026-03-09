@@ -1,4 +1,5 @@
-import React, { useRef } from 'react';
+import { useRef } from 'react';
+import PropTypes from 'prop-types';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -145,6 +146,14 @@ const ProductDistributionChart = ({ data }) => {
       </div>
     </div>
   );
+};
+
+ProductDistributionChart.propTypes = {
+  data: PropTypes.shape({
+    x: PropTypes.array,
+    y: PropTypes.array,
+    descriptive_statistics: PropTypes.object,
+  }),
 };
 
 export default ProductDistributionChart;

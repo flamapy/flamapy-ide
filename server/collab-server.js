@@ -41,6 +41,5 @@ wss.on("connection", (ws, req) => {
 });
 
 server.listen(port, host, () => {
-  // eslint-disable-next-line no-console
   console.log(`[collab] listening on ws://${host}:${port}`);
 });

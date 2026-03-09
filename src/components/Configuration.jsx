@@ -1,3 +1,5 @@
+import PropTypes from 'prop-types';
+
 function Configuration({ configuration }) {
   const categorizedConfig = {
     selected: [],
@@ -63,5 +65,9 @@ function Configuration({ configuration }) {
     </div>
   );
 }
+
+Configuration.propTypes = {
+  configuration: PropTypes.object.isRequired,
+};
 
 export default Configuration;

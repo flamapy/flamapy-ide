@@ -232,7 +232,6 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
     if (currentView === "configurator") setShowConfiguratorPanel(true);
   }, [currentView]);
 
-  // eslint-disable-next-line no-unused-vars
   const handleResize = (e, data) => {
     e.preventDefault();
     if (data.size.height !== lastOutputHeight) {

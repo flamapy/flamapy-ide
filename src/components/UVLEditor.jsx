@@ -58,7 +58,7 @@ function UVLEditor({
 
       operators: ["=", "==", "!", ">", "<", ">=", "<=", "&&", "||", "!", "+"],
 
-      symbols: /[=><!~?:&|+\-*\/\^%]+/,
+      symbols: /[=><!~?:&|+*/^%-]+/,
 
       escapes: /\\(?:[abfnrtv\\"'0-9x])/,
 
@@ -79,7 +79,7 @@ function UVLEditor({
           { include: "@whitespace" },
 
           // Delimiters and operators
-          [/[{}()\[\]]/, "@brackets"],
+          [/[{}()[\]]/, "@brackets"],
           [/[<>](?!@symbols)/, "@brackets"],
           [
             /@symbols/,
@@ -92,7 +92,7 @@ function UVLEditor({
           ],
 
           // Numbers
-          [/\d*\.\d+([eE][\-+]?\d+)?/, "number.float"],
+          [/\d*\.\d+([eE][-+]?\d+)?/, "number.float"],
           [/\d+/, "number"],
 
           // Strings
@@ -106,9 +106,9 @@ function UVLEditor({
         ],
 
         comment: [
-          [/[^\/*]+/, "comment"],
+          [/[^/*]+/, "comment"],
           [/\*\//, "comment", "@pop"],
-          [/[\/*]/, "comment"],
+          [/[/*]/, "comment"],
         ],
 
         string: [

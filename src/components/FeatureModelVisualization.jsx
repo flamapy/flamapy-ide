@@ -79,7 +79,7 @@ const RenderRectSvgNode = ({ nodeDatum, toggleNode }) => {
     } else {
       setFontSize(defaultFontSize);
     }
-  }, [nodeName]);
+  }, [nodeName, availableWidth]);
 
   const dotPosition = { x: 0, y: -rectHeight / 2 };
 

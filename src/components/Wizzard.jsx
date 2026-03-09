@@ -6,7 +6,6 @@ import Information from "./Information";
 import Configuration from "./Configuration";
 
 function Wizzard({ call, setHistory }) {
-  const cancelURL = import.meta.env?.VITE_CANCEL_CONFIGURATION_URL;
   const applyURL = import.meta.env?.VITE_APPLY_CONFIGURATION_URL;
 
   const [isImported, setIsImported] = useState(false);
