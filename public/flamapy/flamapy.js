@@ -123,6 +123,10 @@ process_uvl_file('uvlfile.uvl')
     return await this.pyodide.runPythonAsync(`get_feature_inclusion_probabilities()`);
   }
 
+  async getFeatureFlowMap(data) {
+    return await this.pyodide.runPythonAsync(`get_feature_flow_map(${JSON.stringify(data)})`);
+  }
+
   async executeActionWithConf(data) {
     if (this.isValid) {
       this.pyodide.globals.set("configuration", data.configuration);

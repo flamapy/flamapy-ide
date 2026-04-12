@@ -12,6 +12,7 @@ import FeatureModelVisualization from "../../components/FeatureModelVisualizatio
 import Wizzard from "../../components/Wizzard";
 import ProductDistributionChart from "../../components/ProductDistributionChart";
 import FeatureInclusionProbabilitiesChart from "../../components/FeatureInclusionProbabilitiesChart";
+import FeatureFlowMap from "../../components/FeatureFlowMap";
 import ErrorBoundary from "../../components/ErrorBoundary";
 import JSZip from "jszip";
 import { useWorkerClient } from "../../hooks/useWorkerClient";
@@ -102,6 +103,11 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
   const [configDistData, setConfigDistData] = useState(null);
   const [fipData, setFipData] = useState(null);
 
+  const [isAttrSelectionModalOpen, setIsAttrSelectionModalOpen] = useState(false);
+  const [numericalAttributesSelection, setNumericalAttributesSelection] = useState(null);
+  const [selectedAttribute, setSelectedAttribute] = useState(null);
+  const [ffmData, setFfmData] = useState(null);
+
   const [selectedSolver, setSelectedSolver] = useState("sat");
   const editorRef = useRef(null);
 
@@ -159,6 +165,7 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
     return [
       { label: "Config. Distribution", value: "configdist" },
       { label: "Feature Prob.", value: "fip" },
+      { label: "Feature Flow Map", value: "ffm" },
     ];
   }, [enabledPlugins.bdd]);
 
@@ -292,6 +299,17 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
       return;
     }
 
+    // if (action.value === "ffm") {
+    //   try {
+    //     const attrs = await call("getNumericalAttributes");
+    //     setNumericalAttributesSelection(attrs);
+    //     setIsAttrSelectionModalOpen(true);
+    //   } catch (error) {
+    //     setOutput({ label: "Attribute extraction error", result: error.message });
+    //   }
+    //   return;
+    // }
+
     setIsRunning(true);
     setOutput({ label: action.label, result: "Executing operation" });
     try {
@@ -369,6 +387,7 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
         configurator: "The model is not valid. Fix syntax errors before configuring.",
         configdist: "The model is not valid. Fix syntax errors before computing distribution.",
         fip: "The model is not valid. Fix syntax errors before computing probabilities.",
+        ffm: "The model is not valid. Fix syntax errors before computing the feature flow map.",
       };
       setOutput({ label: option.label, result: messages[option.value] ?? "The model is not valid." });
       return;
@@ -413,6 +432,32 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
       setIsRunning(false);
       return;
     }
+
+    if (option.value === "ffm") {
+      try {
+        const attrs = await call("getNumericalAttributes");
+        setNumericalAttributesSelection(attrs);
+        setIsAttrSelectionModalOpen(true);
+      } catch (error) {
+        setOutput({ label: "Attribute extraction error", result: error.message });
+      }
+      return;
+    }
+      
+    //   setCurrentView("ffm");
+    //   setFfmData(null);
+    //   setIsRunning(true);
+    //   setOutput({ label: "Feature Flow Map", result: "Computing..." });
+    //   try {
+    //     const result = await call("getFeatureFlowMap", selectedAttribute);
+    //     setFfmData(result);
+    //     setOutput({ label: "Feature Flow Map", result: "Done" });
+    //   } catch (error) {
+    //     setOutput({ label: "Feature Flow Map Error", result: error.message });
+    //   }
+    //   setIsRunning(false);
+    //   return;
+    // }
 
     setCurrentView(option.value);
   }
@@ -514,6 +559,27 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
   function closeAttrOptModal() {
     setIsAttrOptModalOpen(false);
     setOptimizationGoals({});
+  }
+
+  function closeAttrSelectionModal() {
+    setIsAttrSelectionModalOpen(false);
+    setNumericalAttributesSelection(null);
+  }
+
+  function executeFlowMap() {
+    setCurrentView("ffm");
+    console.log("Selected attribute for flow map:", selectedAttribute);
+    setIsRunning(true);
+    setOutput({ label: "Feature Flow Map", result: "Executing operation" });
+    call("getFeatureFlowMap", selectedAttribute)
+      .then((result) => {
+        console.log("Feature Flow Map result:", result);
+        setOutput(result);
+        setFfmData(result);
+      })
+      .catch(() => setOutput({ label: "Feature Flow Map", result: "An exception occurred. Check the model definition." }))
+      .finally(() => setIsRunning(false));
+    closeAttrSelectionModal();
   }
 
   // Navbar toolbar (injected via setNavControls)
@@ -701,6 +767,13 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
               </ErrorBoundary>
             </div>
           )}
+          {currentView === "ffm" && (
+            <div className="flex-1 overflow-auto">
+              <ErrorBoundary>
+                <FeatureFlowMap data={ffmData} />
+              </ErrorBoundary>
+            </div>
+          )}
           {currentView === "configurator" && (
             <Wizzard call={call} setHistory={setHistory} />
           )}
@@ -782,6 +855,87 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
                 onClick={executeOptimization}
               >
                 Execute Optimization
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {isAttrSelectionModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-75">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-3xl w-full mx-4 p-6">
+            <h3 className="text-xl font-bold mb-4 text-gray-800 dark:text-gray-200">
+              Select Attribute
+            </h3>
+
+            <div className="max-h-96 overflow-y-auto border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 p-3 rounded">
+              {numericalAttributesSelection && numericalAttributesSelection.length > 0 ? (
+                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                  
+                  {/* HEADER */}
+                  <thead className="bg-gray-100 dark:bg-gray-700 sticky top-0">
+                    <tr>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                        Select
+                      </th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                        Attribute
+                      </th>
+                    </tr>
+                  </thead>
+
+                  {/* BODY (igual estructura, solo simplificado) */}
+                  <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                    {numericalAttributesSelection.map((attribute) => {
+                      const isSelected = selectedAttribute === attribute;
+
+                      return (
+                        <tr key={attribute}>
+                          <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
+                            <input
+                              type="radio"
+                              name="attribute"
+                              checked={isSelected}
+                              onChange={() => setSelectedAttribute(attribute)}
+                              className="h-4 w-4 text-blue-600 border-gray-300"
+                            />
+                          </td>
+
+                          <td className="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
+                            {attribute}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+
+                </table>
+              ) : (
+                <p className="text-sm text-red-500">
+                  No numerical attributes available in this model.
+                </p>
+              )}
+            </div>
+
+            {/* BOTONES */}
+            <div className="mt-6 flex justify-end space-x-3">
+              <button
+                className="px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-800 dark:text-gray-200 font-semibold rounded-md hover:bg-gray-400 dark:hover:bg-gray-500"
+                onClick={closeAttrSelectionModal}
+              >
+                Cancel
+              </button>
+
+              <button
+                className="px-4 py-2 bg-green-600 text-white font-semibold rounded-md hover:bg-green-700"
+                onClick={() => {
+                  if (!selectedAttribute) {
+                    alert("Please select an attribute");
+                    return;
+                  }
+                  executeFlowMap();
+                }}
+              >
+                Confirm
               </button>
             </div>
           </div>

@@ -253,6 +253,31 @@ def get_feature_inclusion_probabilities():
     colors[50] = 'rgb(246, 194, 62)'
     return {'x': x_axis, 'y': y_axis, 'colors': colors}
 
+def get_feature_flow_map(attribute_name: str):
+    print(f"Generating feature flow map for attribute: {attribute_name}")
+    def get_feature_value(feature):
+        attrs = feature.get_attributes()
+        if not attrs:
+            return None
+        for attr in attrs:
+            if attr.name == attribute_name:
+                return attr.default_value
+        return None
+
+    def build_node(feature):
+        node = {
+            "name": feature.name,
+            "value": get_feature_value(feature)
+        }
+        children = feature.get_children()
+        if children:
+            node["children"] = [build_node(child) for child in children]
+        return node
+    root = fm.fm_model.root
+    result = build_node(root)
+    print("Feature Flow Map result:", result)
+    return result
+
 def execute_configurator_operation(name: str, conf):
     dm = DiscoverMetamodels()
     feature_model = fm.fm_model

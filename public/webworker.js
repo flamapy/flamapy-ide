@@ -39,6 +39,10 @@ self.onmessage = async (event) => {
       const proxy = await self.flamapy.getFeatureInclusionProbabilities();
       results = proxy.toJs({ dict_converter: Object.fromEntries });
       if (proxy.destroy) proxy.destroy();
+    } else if (action === "getFeatureFlowMap") {
+      const proxy = await self.flamapy.getFeatureFlowMap(data);
+      results = proxy.toJs({ dict_converter: Object.fromEntries });
+      if (proxy.destroy) proxy.destroy();
     } else if (action === "executeActionWithConf") {
       results = await self.flamapy.executeActionWithConf(data);
     } else if (action === "executeAttributeOptimization") {
