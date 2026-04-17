@@ -321,14 +321,18 @@ def execute_attribute_optimization(attributes_goals):
     attribute_optimization_op.set_attributes(attributes)
 
     configurations_with_values = attribute_optimization_op.execute(z3_model).get_result()
-    results = []
+    results_str = []
+    results = {'objectives': list(attributes.keys()), 
+               'solutions': []}
     for i, config_value in enumerate(configurations_with_values, 1):
         config, values = config_value
         config_str = ', '.join(f'{f}={v}' if not isinstance(v, bool) else f'{f}' for f,v in config.elements.items() if config.is_selected(f))
         values_str = ', '.join(f'{k}={v}' for k,v in values.items())
-        results.append(f'Config. {i}: {config_str} | {values_str}')
-    print(results)
-    return results
+        results_str.append(f'Config. {i}: {config_str} | {values_str}')
+        attr_values = [values[attr] for attr in attributes.keys()]
+        results['solutions'].append({'name': f'Config. {i}', 'configuration': config_str, 'values': attr_values})
+    results['results_str'] = results_str
+    return json.dumps(results)
 
 def start_configurator():
     global configurator

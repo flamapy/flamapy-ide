@@ -13,6 +13,7 @@ import Wizzard from "../../components/Wizzard";
 import ProductDistributionChart from "../../components/ProductDistributionChart";
 import FeatureInclusionProbabilitiesChart from "../../components/FeatureInclusionProbabilitiesChart";
 import FeatureFlowMap from "../../components/FeatureFlowMap";
+import ParetoFrontChart from "../../components/ParentoFrontChart";
 import ErrorBoundary from "../../components/ErrorBoundary";
 import JSZip from "jszip";
 import { useWorkerClient } from "../../hooks/useWorkerClient";
@@ -102,6 +103,7 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
   // Chart data state
   const [configDistData, setConfigDistData] = useState(null);
   const [fipData, setFipData] = useState(null);
+  const [paretoFrontData, setParetoFrontData] = useState(null);
 
   const [isAttrSelectionModalOpen, setIsAttrSelectionModalOpen] = useState(false);
   const [numericalAttributesSelection, setNumericalAttributesSelection] = useState(null);
@@ -443,21 +445,6 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
       }
       return;
     }
-      
-    //   setCurrentView("ffm");
-    //   setFfmData(null);
-    //   setIsRunning(true);
-    //   setOutput({ label: "Feature Flow Map", result: "Computing..." });
-    //   try {
-    //     const result = await call("getFeatureFlowMap", selectedAttribute);
-    //     setFfmData(result);
-    //     setOutput({ label: "Feature Flow Map", result: "Done" });
-    //   } catch (error) {
-    //     setOutput({ label: "Feature Flow Map Error", result: error.message });
-    //   }
-    //   setIsRunning(false);
-    //   return;
-    // }
 
     setCurrentView(option.value);
   }
@@ -549,8 +536,12 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
     }
     setIsRunning(true);
     setOutput({ label: "Attribute Optimization", result: "Executing operation" });
+    setCurrentView("paretofront");
     call("executeAttributeOptimization", selectedGoals)
-      .then((result) => setOutput(result))
+      .then((result) => {
+        setOutput({ label: result.label, result: result.result.results_str });
+        setParetoFrontData(result.result);
+      })
       .catch(() => setOutput({ label: "Attribute Optimization", result: "An exception occurred. Check the model definition." }))
       .finally(() => setIsRunning(false));
     closeAttrOptModal();
@@ -568,12 +559,10 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
 
   function executeFlowMap() {
     setCurrentView("ffm");
-    console.log("Selected attribute for flow map:", selectedAttribute);
     setIsRunning(true);
     setOutput({ label: "Feature Flow Map", result: "Executing operation" });
     call("getFeatureFlowMap", selectedAttribute)
       .then((result) => {
-        console.log("Feature Flow Map result:", result);
         setOutput(result);
         setFfmData(result);
       })
@@ -771,6 +760,13 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
             <div className="flex-1 overflow-auto">
               <ErrorBoundary>
                 <FeatureFlowMap data={ffmData} />
+              </ErrorBoundary>
+            </div>
+          )}
+          {currentView === "paretofront" && (
+            <div className="flex-1 overflow-auto">
+              <ErrorBoundary>
+                <ParetoFrontChart data={paretoFrontData} />
               </ErrorBoundary>
             </div>
           )}

@@ -46,7 +46,8 @@ self.onmessage = async (event) => {
     } else if (action === "executeActionWithConf") {
       results = await self.flamapy.executeActionWithConf(data);
     } else if (action === "executeAttributeOptimization") {
-      results = await self.flamapy.executeAttributeOptimization(data);
+      const response = await self.flamapy.executeAttributeOptimization(data);
+      results = JSON.parse(JSON.stringify(response));
     } else if (action === "startConfigurator") {
       results = await self.flamapy.startConfigurator();
     } else if (action === "answerQuestion") {
