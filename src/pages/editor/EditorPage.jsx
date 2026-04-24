@@ -459,7 +459,7 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
     }
     const code = editorRef.current?.getValue() || "";
     const encoded = btoa(unescape(encodeURIComponent(code)));
-    const rawEndpoint = new URL("/raw", window.location.href);
+    const rawEndpoint = new URL("/raw/model.uvl", window.location.href);
     rawEndpoint.searchParams.set("model", encoded);
     const uvlhubBase = import.meta.env.VITE_UVLHUB_URL || "https://www.uvlhub.io";
     const uvlhubUrl = new URL("/dataset/import/", uvlhubBase);
