@@ -43,8 +43,11 @@ ENV NODE_ENV=production
 # Copy built files from the build stage
 COPY --from=build /app/dist /usr/share/nginx/html
 
-# Copy custom Nginx configuration, if needed (optional)
+# Copy custom Nginx configuration
 COPY nginx.conf /etc/nginx/nginx.conf
+
+# Copy njs script for the /raw endpoint (UVLHub integration)
+COPY nginx/raw.js /etc/nginx/njs/raw.js
 
 # Expose port 80 for the Nginx server
 EXPOSE 80

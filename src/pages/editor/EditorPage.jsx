@@ -84,6 +84,7 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
   });
   const [copyMessage, setCopyMessage] = useState("");
   const [shareMessage, setShareMessage] = useState("");
+  const [uvlhubMessage, setUvlhubMessage] = useState("");
   const [collabStatus, setCollabStatus] = useState("");
   const [initialContent, setInitialContent] = useState("");
   const [featureTree, setFeatureTree] = useState(null);
@@ -449,6 +450,23 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
     setCurrentView(option.value);
   }
 
+  async function handleSaveToUVLHub() {
+    const currentValidation = validation ?? await validateModel();
+    if (!currentValidation?.valid) {
+      setUvlhubMessage("Model must be valid");
+      setTimeout(() => setUvlhubMessage(""), 2000);
+      return;
+    }
+    const code = editorRef.current?.getValue() || "";
+    const encoded = btoa(unescape(encodeURIComponent(code)));
+    const rawEndpoint = new URL("/raw", window.location.href);
+    rawEndpoint.searchParams.set("model", encoded);
+    const uvlhubBase = import.meta.env.VITE_UVLHUB_URL || "https://www.uvlhub.io";
+    const uvlhubUrl = new URL("/dataset/import/", uvlhubBase);
+    uvlhubUrl.searchParams.set("import", rawEndpoint.toString());
+    window.open(uvlhubUrl.toString(), "_blank", "noopener,noreferrer");
+  }
+
   async function handleCopyModelLink() {
     const code = editorRef.current?.getValue() || "";
     const encoded = btoa(unescape(encodeURIComponent(code)));
@@ -656,6 +674,22 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
             </div>
           </div>
 
+          <div className="flex flex-col gap-1 whitespace-nowrap">
+            <span className="text-[11px] text-gray-600 dark:text-gray-300 text-center w-full">UVLHub</span>
+            <div className="h-px bg-gray-300 dark:bg-gray-600 w-full" />
+            <div className="flex items-end gap-1">
+              <div className="flex rounded overflow-hidden border border-gray-300 dark:border-gray-600">
+                <button
+                  className="py-2 px-3 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600"
+                  onClick={handleSaveToUVLHub}
+                >
+                  Save to UVLHub
+                </button>
+              </div>
+              {uvlhubMessage && <span className="text-xs text-gray-600 dark:text-gray-300">{uvlhubMessage}</span>}
+            </div>
+          </div>
+
           {collabEnabled && (
             <div className="flex flex-col gap-1 whitespace-nowrap">
               <span className="text-[11px] text-gray-600 dark:text-gray-300 text-center w-full">Collaborate</span>
@@ -694,7 +728,7 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
       </div>
     );
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [collabEnabled, collabFeatureAvailable, collabStatus, copyMessage, currentView, metricsOptions, selectedSolver, shareMessage, solverOptions, viewOptions]);
+  }, [collabEnabled, collabFeatureAvailable, collabStatus, copyMessage, currentView, metricsOptions, selectedSolver, shareMessage, uvlhubMessage, solverOptions, viewOptions]);
 
   useEffect(() => {
     if (setNavControls) {

@@ -7,10 +7,10 @@ module.exports = {
     'plugin:react/jsx-runtime',
     'plugin:react-hooks/recommended',
   ],
-  ignorePatterns: ['dist', '.eslintrc.cjs', 'public/'],
+  ignorePatterns: ['dist', '.eslintrc.cjs', 'public/', 'nginx/'],
   overrides: [
     {
-      files: ['server/**/*.js'],
+      files: ['server/**/*.js', 'vite.config.js'],
       env: { node: true },
     },
   ],
