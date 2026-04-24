@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 
 const PrivacyPolicy = () => {
 	return (
-		<div className="max-w-3xl mx-auto px-6 py-12 text-gray-800">
+		<div className="max-w-3xl mx-auto px-6 py-12 text-gray-800 dark:text-gray-300">
 			<h1 className="text-3xl font-bold mb-6">Privacy Policy</h1>
 
 			<p className="mb-6">
@@ -32,7 +32,7 @@ const PrivacyPolicy = () => {
 				</p>
 			</section>
 
-			<p className="text-sm text-gray-600">
+			<p className="text-sm text-gray-600 dark:text-gray-400">
 				If you have any questions about our privacy policy, please contact us.
 			</p>
 		</div>

@@ -41,19 +41,19 @@ function App() {
         <Navbar controls={navControls} darkMode={darkMode} toggleDark={() => setDarkMode((d) => !d)}>
           <Link
             to="/how-to-cite-us"
-            className="text-m font-medium text-gray-600 hover:text-blue-600 transition-colors duration-200"
+            className="text-m font-medium text-gray-600 dark:text-gray-300 hover:text-blue-600 transition-colors duration-200"
           >
             How to cite us
           </Link>
           <Link
             to="https://github.com/flamapy/flamapy-ide"
-            className="text-m font-medium text-gray-600 hover:text-blue-600 transition-colors duration-200"
+            className="text-m font-medium text-gray-600 dark:text-gray-300 hover:text-blue-600 transition-colors duration-200"
           >
             GitHub
           </Link>
           <Link
             to="/privacy"
-            className="text-m font-medium text-gray-600 hover:text-blue-600 transition-colors duration-200"
+            className="text-m font-medium text-gray-600 dark:text-gray-300 hover:text-blue-600 transition-colors duration-200"
           >
             Privacy
           </Link>

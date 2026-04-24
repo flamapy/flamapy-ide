@@ -17,7 +17,7 @@ const ModelProperties = ({ modelProperties }) => {
           <div key={key} className="mb-4">
             <span className="font-bold text-neutral-900 dark:text-gray-100">{key}:</span>
             {Array.isArray(value) ? (
-              <CollapsibleList items={value} />
+              <CollapsibleList items={value} isOpenDefault={false} />
             ) : (
               <span className="ml-4 font-mono text-[#171a1b] dark:text-gray-200">{value}</span>
             )}
@@ -29,8 +29,8 @@ const ModelProperties = ({ modelProperties }) => {
   );
 };
 
-const CollapsibleList = ({ items }) => {
-  const [isOpen, setIsOpen] = useState(false);
+const CollapsibleList = ({ items, isOpenDefault, decimal = false}) => {
+  const [isOpen, setIsOpen] = useState(isOpenDefault);
 
   return (
     <div className="ml-4">
@@ -41,10 +41,16 @@ const CollapsibleList = ({ items }) => {
         {isOpen ? "Hide Details" : "Show Details"}
       </button>
       {isOpen && (
-        <ul className="list-disc list-inside mt-2 space-y-1">
+        <ul className={`list-${decimal ? 'decimal': 'disc'} list-inside mt-2 space-y-1`}>
           {items.map((item, index) => (
             <li key={index} className="font-mono text-[#0D486C] dark:text-blue-300">
-              {item}
+              {Array.isArray(item) ? (<>
+                <span className=" font-mono text-[#171a1b] dark:text-gray-200">Atomic Set #{index + 1}</span>
+              <CollapsibleList items={item} isOpenDefault={false} decimal={true} />
+              </>
+            ) : (
+              <span className=" font-mono text-[#171a1b] dark:text-gray-200">{item}</span>
+            )}
             </li>
           ))}
         </ul>

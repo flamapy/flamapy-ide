@@ -17,8 +17,8 @@ const bibtex = `@inproceedings{10.1145/3715340.3715436,
 const HowToCiteUs = () => {
   return (
     <div className="max-w-4xl mx-auto py-12 px-6">
-      <h1 className="text-3xl font-semibold text-gray-800 mb-4">How to Cite Us</h1>
-      <p className="text-gray-700 mb-6">
+      <h1 className="text-3xl font-semibold text-gray-800 dark:text-gray-300 mb-4">How to Cite Us</h1>
+      <p className="text-gray-700 dark:text-gray-300 mb-6">
         If you use <span className="font-medium">flamapy.ide</span> in your research, please cite the following paper:
       </p>
 
