@@ -34,7 +34,7 @@ export function useWorkerClient() {
   const nextIdRef = useRef(0);
 
   useEffect(() => {
-    const worker = new Worker("/webworker.js");
+    const worker = new Worker(`${import.meta.env.BASE_URL}webworker.js`);
     workerRef.current = worker;
     attachHandler(worker, pendingRef, setIsLoaded, setPluginsConfig);
     return () => worker.terminate();
@@ -56,7 +56,7 @@ export function useWorkerClient() {
     pendingRef.current.clear();
     setIsLoaded(false);
 
-    const worker = new Worker("/webworker.js");
+    const worker = new Worker(`${import.meta.env.BASE_URL}webworker.js`);
     workerRef.current = worker;
     attachHandler(worker, pendingRef, setIsLoaded, setPluginsConfig);
   }, []);

@@ -348,7 +348,7 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
     } else if (action.value === "downloadConfigurator") {
       const zip = new JSZip();
       try {
-        const response = await fetch("/assets/flamapy.conf.zip");
+        const response = await fetch(`${import.meta.env.BASE_URL}assets/flamapy.conf.zip`);
         if (!response.ok) throw new Error("Failed to load base.zip");
         const baseZip = await JSZip.loadAsync(await (await response.blob()).arrayBuffer());
         baseZip.forEach((relativePath, file) => zip.file(relativePath, file.async("arraybuffer")));

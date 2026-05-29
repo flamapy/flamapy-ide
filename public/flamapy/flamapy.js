@@ -1,6 +1,6 @@
 /* eslint-disable no-unused-vars */
 /* eslint-disable no-undef */
-importScripts("/pyodide/pyodide.js");
+importScripts("pyodide/pyodide.js");
 
 class Flamapy {
   constructor() {
@@ -11,8 +11,8 @@ class Flamapy {
 
   async loadFlamapy() {
     const [pythonFile, configResponse] = await Promise.all([
-      fetch("/flamapy/flamapy_ide.py"),
-      fetch("/flamapy/plugins.conf.json"),
+      fetch("flamapy/flamapy_ide.py"),
+      fetch("flamapy/plugins.conf.json"),
     ]);
     this.pluginsConfig = await configResponse.json();
 
