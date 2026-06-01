@@ -1,0 +1,52 @@
+name: Update flamapy wheels
+
+# Keeps the flamapy-authored wheels in public/flamapy/ in sync with the latest
+# flamapy release. Runs on a daily schedule and on demand; opens a pull request
+# whenever the bundle changes. Third-party deps and the z3_solver wasm wheel are
+# not touched (use `make build-wheels` for those).
+on:
+  schedule:
+    - cron: "0 6 * * *"   # daily at 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Update flamapy wheels from the latest release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python scripts/update_flamapy_wheels.py
+
+      - name: Open a pull request with the refreshed wheels
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: chore/update-flamapy-wheels
+          delete-branch: true
+          title: "chore: update flamapy wheels to the latest release"
+          commit-message: "chore: sync flamapy wheels with the latest flamapy release"
+          body: |
+            Automated update of the flamapy-authored wheels in `public/flamapy/`
+            from the latest [flamapy release](https://github.com/flamapy/flamapy/releases/latest).
+
+            Refreshed `flamapy`, `flamapy-fw`, `flamapy-fm`, `flamapy-sat`,
+            `flamapy-bdd` and `flamapy-z3`, and rewrote the matching filenames in
+            `plugins.conf.json`. Third-party dependencies and the `z3_solver`
+            wasm wheel are unchanged.
+
+            > Note: PRs opened with the default `GITHUB_TOKEN` do not trigger
+            > other workflows. Push an empty commit or re-open the PR to run CI.
+          add-paths: |
+            public/flamapy/*.whl
+            public/flamapy/plugins.conf.json

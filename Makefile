@@ -37,11 +37,21 @@ help:
 	@echo ""
 	@echo "Usage:"
 	@echo "  make build-wheels                         Download flamapy wheels from PyPI into $(FLAMAPY_WHEELS_DIR)"
+	@echo "  make update-flamapy-wheels                Sync flamapy-authored wheels from the latest flamapy release"
 	@echo "  make clean-old-wheels                     Remove wheels in $(FLAMAPY_WHEELS_DIR) not listed in plugins.conf.json"
 	@echo "  make dependencies PACKAGE=<package_name>  Download and build wheels for a package"
 	@echo "  make clean                                Remove all downloaded files in $(WHEELS_DIR)"
 	@echo "  make clean-tar                            Remove only source tarballs (.tar.gz, .zip)"
 	@echo "  make help                                 Show this help message"
+
+# Sync the flamapy-authored wheels (flamapy + fw/fm/sat/bdd/z3) with the latest
+# flamapy release by downloading its wheels bundle and rewriting the matching
+# filenames in plugins.conf.json.  Third-party deps and the z3_solver wasm wheel
+# are left untouched (use `make build-wheels` for those).  This is the same
+# script the "Update flamapy wheels" GitHub workflow runs.
+.PHONY: update-flamapy-wheels
+update-flamapy-wheels:
+	python scripts/update_flamapy_wheels.py
 
 # Download pure-python wheels from PyPI into public/flamapy/ so the IDE can
 # serve them via Pyodide/micropip.  Uses --no-deps so only the requested
