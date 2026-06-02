@@ -1,8 +1,18 @@
-flamapy==2.0.1
-./public/flamapy/flamapy_fw-2.0.2.dev0-py3-none-any.whl
-./public/flamapy/flamapy_fm-2.0.2.dev0-py3-none-any.whl
-./public/flamapy/flamapy_configurator-2.0.1-py3-none-any.whl
-flamapy_sat==2.0.1
-flamapy_bdd==2.0.1
+# Native test/dev dependencies for the IDE's Python bridge
+# (public/flamapy/flamapy_ide.py — the module Pyodide runs in the browser).
+#
+# The flamapy packages are intentionally NOT pinned here. CI installs the exact
+# wheels served to the browser from public/flamapy/ (see pytest.yaml), so the
+# tests run against the real shipped artifacts instead of a separate PyPI pin.
+# The single source of truth for the flamapy version is ./flamapy.version.
+#
+# The two solver backends below are the native equivalents of the Pyodide
+# packages the browser loads at runtime (python-sat, and the z3_solver WASM
+# wheel). They are NOT committed in public/flamapy/, so the native test env
+# pulls them from PyPI. The version ranges track what the pinned flamapy
+# plugins require (flamapy-sat -> python-sat, flamapy-z3 -> z3-solver); bump
+# them if flamapy.version moves to a release with different solver constraints.
+python-sat~=0.1.7.dev1
+z3-solver~=4.14.1.0
 pytest==8.3.3
 pytest-cov==5.0.0

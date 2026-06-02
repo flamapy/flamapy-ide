@@ -6,7 +6,6 @@ function Home({ setSelectedFile }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [fetchError, setFetchError] = useState(false);
-  const [importURL, setImportURL] = useState(null);
   const [showModelList, setShowModelList] = useState(false);
 
   const predefinedModels = [
@@ -21,7 +20,6 @@ function Home({ setSelectedFile }) {
     const searchParams = new URLSearchParams(location.search);
     if (searchParams.has("import")) {
       const url = searchParams.get("import");
-      setImportURL(url);
 
       fetch(url)
         .then((response) => {
@@ -52,6 +50,7 @@ function Home({ setSelectedFile }) {
           setFetchError(true);
         });
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleFileChange = (event) => {
@@ -123,13 +122,13 @@ function Home({ setSelectedFile }) {
         {/* Modal for Model Selection */}
         {showModelList && (
           <div className="modal fixed inset-0 flex items-center justify-center bg-black bg-opacity-50">
-            <div className="bg-white p-4 rounded-md">
-              <h2 className="text-lg font-semibold mb-2">Select a Model to Import</h2>
+            <div className="bg-white dark:bg-gray-600 p-4 rounded-md">
+              <h2 className="text-lg dark:text-gray-300 font-semibold mb-2">Select a Model to Import</h2>
               <ul>
                 {predefinedModels.map((model, index) => (
                   <li key={index} className="mb-2">
                     <button
-                      className="text-blue-500 underline"
+                      className="text-blue-500 dark:text-blue-300 underline"
                       onClick={() => handleModelImport(model.url)}
                     >
                       {model.name}

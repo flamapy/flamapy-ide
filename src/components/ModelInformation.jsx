@@ -6,7 +6,7 @@ const ModelInformation = ({
   width = 300,
   minWidth = 150,
   maxWidth = 400,
-  buttonText = "Validate model",
+  buttonText = "Syntax Validation",
   onValidateModel,
   validation,
 }) => {
@@ -17,7 +17,7 @@ const ModelInformation = ({
       axis="x"
       minConstraints={[minWidth, Infinity]}
       maxConstraints={[maxWidth, Infinity]}
-      className="bg-neutral-300 text-neutral-900 p-4 resize-handle-left rounded-lg overflow-auto"
+      className="bg-neutral-300 dark:bg-gray-700 text-neutral-900 dark:text-gray-100 p-4 resize-handle-left rounded-lg overflow-auto"
       handle={
         <div className="absolute left-0 top-0 h-full w-2 cursor-ew-resize" />
       }

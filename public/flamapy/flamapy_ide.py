@@ -1,4 +1,4 @@
-import json, os
+import json, math, os
 from flamapy.interfaces.python import FLAMAFeatureModel
 from flamapy.core.exceptions import FlamaException
 from antlr4 import CommonTokenStream, FileStream
@@ -10,6 +10,17 @@ from flamapy.metamodels.fm_metamodel.transformations import GlencoeReader, AFMRe
 from flamapy.metamodels.configuration_metamodel.models import Configuration
 from flamapy.metamodels.configurator_metamodel.transformation import FmToConfigurator
 from collections import defaultdict
+from flamapy.metamodels.fm_metamodel.operations import FMLanguageLevel
+from flamapy.metamodels.fm_metamodel.models import AttributeType
+
+try:
+    from flamapy.metamodels.z3_metamodel.transformations import FmToZ3
+    from flamapy.metamodels.z3_metamodel.operations import Z3AttributeOptimization
+    from flamapy.metamodels.z3_metamodel.operations.interfaces import OptimizationGoal
+    _z3_available = True
+except ImportError:
+    _z3_available = False
+
 
 fm = None
 configurator = None
@@ -82,6 +93,7 @@ def process_uvl_file(file_path):
 def get_model_information():
     model_information = dict()
 
+    model_information['Language Level'] = get_language_level(fm)
     model_information['Average Branching Factor'] = fm.average_branching_factor()
     model_information['Leaf Number'] = fm.count_leafs()
     model_information['Estimated Number of Configurations'] = fm.estimated_number_of_configurations()
@@ -90,6 +102,15 @@ def get_model_information():
     model_information['Core Features'] = fm.core_features()
     model_information['Leaf Features'] = fm.leaf_features()
     return model_information
+
+
+def get_language_level(fm: FLAMAFeatureModel):
+    levels = FMLanguageLevel().execute(fm.fm_model).get_result()
+    major_level = levels.major.name.capitalize()
+    minors_levels = ', '.join([m.name.replace('_', ' ').capitalize() for m in levels.minors])
+    minors_suffix = " ({})".format(minors_levels) if minors_levels else ""
+    return "{}{}".format(major_level, minors_suffix)
+
 
 def execute_pysat_operation(name: str):
     dm = DiscoverMetamodels()
@@ -108,11 +129,22 @@ def execute_pysat_operation(name: str):
         operation = dm.get_operation(sat_model, name)
         # Execute the operation
         operation.execute(sat_model)
+    
+    elif 'Z3' in name:
+        if not _z3_available:
+            return json.dumps("Z3 plugin is not installed.")
+        print(f"Executing Z3 operation {name}")
+        z3_model = dm.use_transformation_m2m(feature_model, "z3")
+        # Get the operation
+        operation = dm.get_operation(z3_model, name)
+        # Execute the operation
+        operation.execute(z3_model)
+        
     # Get and print the result
     result = operation.get_result()
     if type(result) is list:
         return json.dumps([str(conf) for conf in result])
-    if isinstance(result,defaultdict):
+    if isinstance(result, (defaultdict, dict)):
         return json.dumps(["{}: {}".format(str(k), str(v)) for k,v in result.items()])
     return json.dumps(result)
 
@@ -172,6 +204,7 @@ def feature_tree(node):
     res['attributes']['isNumerical'] = node.is_numerical()
     res['attributes']['isString'] = node.is_string()
     res['attributes']['featureType'] = node.feature_type.value
+    res['attributes']['attributes'] = [str(attribute) for attribute in node.get_attributes()]
 
     if node.get_children():
         res['attributes']['isAlternativeGroup'] = node.is_alternative_group()
@@ -189,6 +222,61 @@ def get_features():
     if fm:
         features = [feature.name for feature in fm.fm_model.get_features()]
         return features
+
+def get_numerical_attributes():
+    if fm:
+        attributes = {attr.name for attr in fm.fm_model.get_attributes() if attr.attribute_type in [AttributeType.INTEGER, AttributeType.REAL]}
+        attributes = list(attributes)
+        print("Numerical attributes:", attributes)
+        return attributes
+
+def get_configuration_distribution():
+    dm = DiscoverMetamodels()
+    bdd_model = dm.use_transformation_m2m(fm.fm_model, 'bdd')
+    operation = dm.get_operation(bdd_model, 'BDDProductDistribution')
+    operation.execute(bdd_model)
+    configdist = operation.product_distribution()
+    descriptive_stats = operation.descriptive_statistics()
+    dist_stats = {e: round(v, 2) for e, v in descriptive_stats.items()}
+    return {'x': list(range(len(configdist))), 'y': configdist, 'descriptive_statistics': dist_stats}
+
+def get_feature_inclusion_probabilities():
+    dm = DiscoverMetamodels()
+    bdd_model = dm.use_transformation_m2m(fm.fm_model, 'bdd')
+    operation = dm.get_operation(bdd_model, 'BDDFeatureInclusionProbability')
+    operation.execute(bdd_model)
+    prob = operation.get_result()
+    n_features = len(prob)
+    x_axis = [x / 100.0 for x in range(0, 101, 1)]
+    y_axis = [round(sum(math.isclose(x, round(p, 2), abs_tol=1e-4) for p in prob.values()) / n_features, 2) * 100 for x in x_axis]
+    colors = ['rgb(231, 74, 59)'] + ['rgb(126, 157, 188)'] * (len(x_axis) - 2) + ['rgb(28, 200, 138)']
+    colors[50] = 'rgb(246, 194, 62)'
+    return {'x': x_axis, 'y': y_axis, 'colors': colors}
+
+def get_feature_flow_map(attribute_name: str):
+    print(f"Generating feature flow map for attribute: {attribute_name}")
+    def get_feature_value(feature):
+        attrs = feature.get_attributes()
+        if not attrs:
+            return None
+        for attr in attrs:
+            if attr.name == attribute_name:
+                return attr.default_value
+        return None
+
+    def build_node(feature):
+        node = {
+            "name": feature.name,
+            "value": get_feature_value(feature)
+        }
+        children = feature.get_children()
+        if children:
+            node["children"] = [build_node(child) for child in children]
+        return node
+    root = fm.fm_model.root
+    result = build_node(root)
+    print("Feature Flow Map result:", result)
+    return result
 
 def execute_configurator_operation(name: str, conf):
     dm = DiscoverMetamodels()
@@ -215,6 +303,36 @@ def execute_configurator_operation(name: str, conf):
     if type(result) is list:
         return [str(conf) for conf in result]
     return result
+
+def execute_attribute_optimization(attributes_goals):
+    if not _z3_available:
+        return ["Z3 plugin is not installed."]
+    print("Attributes goals received:", attributes_goals)
+
+    feature_model = fm.fm_model
+    z3_model = FmToZ3(feature_model).transform()
+
+    attribute_optimization_op = Z3AttributeOptimization()
+    attributes = dict()
+    for attr_goal_dict in attributes_goals:
+        attr_name = attr_goal_dict['attribute']
+        goal_str = attr_goal_dict['goal']
+        attributes[attr_name] = OptimizationGoal.MINIMIZE if goal_str == 'Minimize' else OptimizationGoal.MAXIMIZE
+    attribute_optimization_op.set_attributes(attributes)
+
+    configurations_with_values = attribute_optimization_op.execute(z3_model).get_result()
+    results_str = []
+    results = {'objectives': list(attributes.keys()), 
+               'solutions': []}
+    for i, config_value in enumerate(configurations_with_values, 1):
+        config, values = config_value
+        config_str = ', '.join(f'{f}={v}' if not isinstance(v, bool) else f'{f}' for f,v in config.elements.items() if config.is_selected(f))
+        values_str = ', '.join(f'{k}={v}' for k,v in values.items())
+        results_str.append(f'Config. {i}: {config_str} | {values_str}')
+        attr_values = [values[attr] for attr in attributes.keys()]
+        results['solutions'].append({'name': f'Config. {i}', 'configuration': config_str, 'values': attr_values})
+    results['results_str'] = results_str
+    return json.dumps(results)
 
 def start_configurator():
     global configurator

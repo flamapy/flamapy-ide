@@ -25,11 +25,25 @@ EXPOSE 5173
 # Start the Vite development server
 CMD ["npm", "run", "dev", "--", "--host"]
 
-# Stage 3: Production Build
+# Stage 3: Regenerate the flamapy wheels served to the browser.
+# These wheels are not tracked in git (see .gitignore); `make build-wheels`
+# rebuilds them from flamapy.version + the Makefile dep list. The two manually
+# vendored wheels (flamapy-configurator, z3_solver wasm) are copied in from the
+# build context, which `make build-wheels` leaves untouched.
+FROM python:3.11 AS wheels
+WORKDIR /app
+COPY Makefile flamapy.version ./
+COPY public/flamapy ./public/flamapy
+RUN make build-wheels
+
+# Stage 4: Production Build
 FROM base AS build
 
 # Set environment to production
 ENV NODE_ENV=production
+
+# Pull in the regenerated wheels so Vite copies them into dist/
+COPY --from=wheels /app/public/flamapy ./public/flamapy
 
 # Build the app
 RUN npm run build
@@ -43,8 +57,11 @@ ENV NODE_ENV=production
 # Copy built files from the build stage
 COPY --from=build /app/dist /usr/share/nginx/html
 
-# Copy custom Nginx configuration, if needed (optional)
+# Copy custom Nginx configuration
 COPY nginx.conf /etc/nginx/nginx.conf
+
+# Copy njs script for the /raw endpoint (UVLHub integration)
+COPY nginx/raw.js /etc/nginx/njs/raw.js
 
 # Expose port 80 for the Nginx server
 EXPOSE 80

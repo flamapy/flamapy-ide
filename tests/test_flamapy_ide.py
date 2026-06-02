@@ -1,6 +1,11 @@
 import pytest
 import json
-from public.flamapy.flamapy_ide import process_uvl_file, execute_pysat_operation, feature_tree, execute_configurator_operation, execute_export_transformation, execute_import_transformation, get_model_information
+from public.flamapy.flamapy_ide import (
+    process_uvl_file, execute_pysat_operation, feature_tree,
+    execute_configurator_operation, execute_export_transformation,
+    execute_import_transformation, get_model_information,
+    get_configuration_distribution, get_feature_inclusion_probabilities,
+)
 
 # Test to process a UVL file (valid)
 def test_process_uvl_file_valid():
@@ -27,12 +32,12 @@ def test_get_model_information():
     result = get_model_information()
 
     assert result['Average Branching Factor'] == 2
-    result['Leaf Number'] == 2
-    result['Estimated Number of Configurations'] == 4
-    result['Max Depth'] == 1
-    result['Atomic Sets'] == [['A'], ['B'], ['C']]
-    result['Core Features'] = ['A']
-    result['Leaf Features'] = ['B', 'C']
+    assert result['Leaf Number'] == 2
+    assert result['Estimated Number of Configurations'] == 4
+    assert result['Max Depth'] == 1
+    assert result['Atomic Sets'] == [['A'], ['B'], ['C']]
+    assert result['Core Features'] == ['A']
+    assert result['Leaf Features'] == ['B', 'C']
 
 # Test PySAT operation
 @pytest.mark.parametrize('operation,expected', [('PySATConfigurations', ['A', 'A, C', 'A, B, C']),
@@ -46,7 +51,11 @@ def test_execute_pysat_operation(operation,expected):
     result = execute_pysat_operation(operation)
 
     assert isinstance(result, (list, str, int, float))
-    assert json.loads(result) == expected
+    parsed = json.loads(result)
+    if isinstance(parsed, list) and isinstance(expected, list):
+        assert sorted(parsed) == sorted(expected)
+    else:
+        assert parsed == expected
 
 # Test export transformation
 @pytest.mark.parametrize('format',['afm','json','gfm.json','sxfm','uvl'])
@@ -76,6 +85,36 @@ def test_execute_configurator_operation(config, expected):
 
     assert isinstance(result, bool)
     assert result is expected
+
+def test_get_configuration_distribution():
+    process_uvl_file('./tests/test_models/uvlfile.uvl')
+    result = get_configuration_distribution()
+    assert 'x' in result
+    assert 'y' in result
+    assert 'descriptive_statistics' in result
+    assert len(result['x']) == len(result['y'])
+    assert isinstance(result['descriptive_statistics'], dict)
+
+
+def test_get_feature_inclusion_probabilities():
+    process_uvl_file('./tests/test_models/uvlfile.uvl')
+    result = get_feature_inclusion_probabilities()
+    assert 'x' in result
+    assert 'y' in result
+    assert 'colors' in result
+    assert len(result['x']) == len(result['y']) == len(result['colors'])
+    assert all(0.0 <= v <= 100.0 for v in result['y'])
+
+
+def test_bdd_feature_inclusion_probability_serializes_as_list():
+    """BDDFeatureInclusionProbability returns a dict — ensure it serialises to a
+    list of 'feature: probability' strings, not [object Object]."""
+    process_uvl_file('./tests/test_models/uvlfile.uvl')
+    result = execute_pysat_operation('BDDFeatureInclusionProbability')
+    parsed = json.loads(result)
+    assert isinstance(parsed, list)
+    assert all(isinstance(item, str) and ':' in item for item in parsed)
+
 
 def test_feature_tree():
     process_uvl_file('./tests/test_models/uvlfile.uvl')

@@ -1,3 +1,5 @@
+import PropTypes from 'prop-types';
+
 function Configuration({ configuration }) {
   const categorizedConfig = {
     selected: [],
@@ -16,46 +18,46 @@ function Configuration({ configuration }) {
   });
 
   return (
-    <div className="bg-white w-full rounded-xl p-4 text-xl shadow-md overflow-auto">
-      <h2 className="text-2xl font-bold text-gray-800 mb-4">
+    <div className="bg-white dark:bg-gray-800 w-full rounded-xl p-4 text-xl shadow-md overflow-auto">
+      <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-200 mb-4">
         Feature Configuration
       </h2>
       <div className="text-lg">
         <div className="mb-2">
           <h3 className="font-semibold text-green-600">Selected Features:</h3>
-          <ul className="list-disc list-inside text-black">
+          <ul className="list-disc list-inside text-black dark:text-gray-200">
             {categorizedConfig.selected.length > 0 ? (
               categorizedConfig.selected.map((feature, index) => (
                 <li key={index}>{feature}</li>
               ))
             ) : (
-              <p className="text-gray-500">None</p>
+              <p className="text-gray-500 dark:text-gray-400">None</p>
             )}
           </ul>
         </div>
 
         <div className="mb-2">
           <h3 className="font-semibold text-red-600">Deselected Features:</h3>
-          <ul className="list-disc list-inside text-black">
+          <ul className="list-disc list-inside text-black dark:text-gray-200">
             {categorizedConfig.deselected.length > 0 ? (
               categorizedConfig.deselected.map((feature, index) => (
                 <li key={index}>{feature}</li>
               ))
             ) : (
-              <p className="text-gray-500">None</p>
+              <p className="text-gray-500 dark:text-gray-400">None</p>
             )}
           </ul>
         </div>
 
         <div>
           <h3 className="font-semibold text-yellow-600">Undecided Features:</h3>
-          <ul className="list-disc list-inside text-black">
+          <ul className="list-disc list-inside text-black dark:text-gray-200">
             {categorizedConfig.undecided.length > 0 ? (
               categorizedConfig.undecided.map((feature, index) => (
                 <li key={index}>{feature}</li>
               ))
             ) : (
-              <p className="text-gray-500">None</p>
+              <p className="text-gray-500 dark:text-gray-400">None</p>
             )}
           </ul>
         </div>
@@ -63,5 +65,9 @@ function Configuration({ configuration }) {
     </div>
   );
 }
+
+Configuration.propTypes = {
+  configuration: PropTypes.object.isRequired,
+};
 
 export default Configuration;

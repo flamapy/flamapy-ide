@@ -1,10 +1,41 @@
 /* eslint-disable react/prop-types */
 
+import { useEffect, useRef } from "react";
 import { Editor } from "@monaco-editor/react";
+import * as Y from "yjs";
+import { WebsocketProvider } from "y-websocket";
+import { MonacoBinding } from "y-monaco";
 
-function UVLEditor({ editorRef, validateModel, defaultCode = "", hide }) {
+function UVLEditor({
+  editorRef,
+  validateModel,
+  defaultCode = "",
+  hide,
+  collabConfig,
+  onEditorMount,
+  darkMode,
+}) {
+  const collabRefs = useRef({ provider: null, ydoc: null });
+  const monacoRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      collabRefs.current?.provider?.destroy();
+      collabRefs.current?.ydoc?.destroy();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (monacoRef.current) {
+      monacoRef.current.editor.setTheme(darkMode ? "vs-dark" : "vs");
+    }
+  }, [darkMode]);
+
   function handleEditorDidMount(editor, monaco) {
     editorRef.current = editor;
+    monacoRef.current = monaco;
+    monaco.editor.setTheme(darkMode ? "vs-dark" : "vs");
+    onEditorMount?.();
     monaco.languages.register({ id: "uvl" });
 
     // Set the tokens provider (syntax highlighting)
@@ -27,7 +58,7 @@ function UVLEditor({ editorRef, validateModel, defaultCode = "", hide }) {
 
       operators: ["=", "==", "!", ">", "<", ">=", "<=", "&&", "||", "!", "+"],
 
-      symbols: /[=><!~?:&|+\-*\/\^%]+/,
+      symbols: /[=><!~?:&|+*/^%-]+/,
 
       escapes: /\\(?:[abfnrtv\\"'0-9x])/,
 
@@ -48,7 +79,7 @@ function UVLEditor({ editorRef, validateModel, defaultCode = "", hide }) {
           { include: "@whitespace" },
 
           // Delimiters and operators
-          [/[{}()\[\]]/, "@brackets"],
+          [/[{}()[\]]/, "@brackets"],
           [/[<>](?!@symbols)/, "@brackets"],
           [
             /@symbols/,
@@ -61,7 +92,7 @@ function UVLEditor({ editorRef, validateModel, defaultCode = "", hide }) {
           ],
 
           // Numbers
-          [/\d*\.\d+([eE][\-+]?\d+)?/, "number.float"],
+          [/\d*\.\d+([eE][-+]?\d+)?/, "number.float"],
           [/\d+/, "number"],
 
           // Strings
@@ -75,9 +106,9 @@ function UVLEditor({ editorRef, validateModel, defaultCode = "", hide }) {
         ],
 
         comment: [
-          [/[^\/*]+/, "comment"],
+          [/[^/*]+/, "comment"],
           [/\*\//, "comment", "@pop"],
-          [/[\/*]/, "comment"],
+          [/[/*]/, "comment"],
         ],
 
         string: [
@@ -113,14 +144,75 @@ function UVLEditor({ editorRef, validateModel, defaultCode = "", hide }) {
         { open: '"', close: '"' },
       ],
     });
+    monaco.languages.registerCompletionItemProvider("uvl", {
+      provideCompletionItems: (model, position) => {
+        const word = model.getWordUntilPosition(position);
+        const range = {
+          startLineNumber: position.lineNumber,
+          endLineNumber: position.lineNumber,
+          startColumn: word.startColumn,
+          endColumn: word.endColumn,
+        };
+        const kw = (label, insertText, detail) => ({
+          label,
+          kind: monaco.languages.CompletionItemKind.Keyword,
+          insertText,
+          insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+          detail,
+          range,
+        });
+        return {
+          suggestions: [
+            kw("namespace",  "namespace ${1:ModelName}\n",         "Declare model namespace"),
+            kw("features",   "features\n\t${1:Root}\n",            "Feature declarations block"),
+            kw("constraints","constraints\n\t${1:constraint}\n",   "Constraints block"),
+            kw("mandatory",  "mandatory\n\t\t${1:Feature}\n",      "Mandatory group"),
+            kw("optional",   "optional\n\t\t${1:Feature}\n",       "Optional group"),
+            kw("alternative","alternative\n\t\t${1:Feature}\n",    "Alternative (XOR) group"),
+            kw("or",         "or\n\t\t${1:Feature}\n",             "Or group"),
+          ],
+        };
+      },
+    });
+
+    if (collabConfig?.enabled) {
+      const ydoc = new Y.Doc();
+      const provider = new WebsocketProvider(
+        collabConfig.endpoint,
+        collabConfig.docId,
+        ydoc
+      );
+      const yText = ydoc.getText("uvl");
+
+      if (yText.length === 0 && defaultCode) {
+        yText.insert(0, defaultCode);
+      }
+
+      new MonacoBinding(
+        yText,
+        editor.getModel(),
+        new Set([editor]),
+        provider.awareness
+      );
+
+      provider.awareness.setLocalStateField("user", {
+        name: collabConfig.userName || "anonymous",
+      });
+
+      collabRefs.current = { provider, ydoc };
+    } else if (defaultCode) {
+      editor.setValue(defaultCode);
+    }
   }
 
   return (
-    <div className={`flex-1 bg-gray-100 text-black p-4 ${hide && "hidden"}`}>
+    <div className={`flex-1 bg-gray-100 dark:bg-gray-900 text-black dark:text-gray-100 p-4 ${hide && "hidden"}`}>
       <div className="grid grid-cols-1 grid-rows-1 h-full w-full rounded-lg">
         <Editor
+          key={collabConfig?.enabled ? `collab-${collabConfig.docId}` : "solo"}
           defaultLanguage="uvl"
-          value={defaultCode}
+          defaultValue={collabConfig?.enabled ? "" : defaultCode}
+          theme={darkMode ? "vs-dark" : "vs"}
           onMount={handleEditorDidMount}
           onChange={validateModel}
           options={{
