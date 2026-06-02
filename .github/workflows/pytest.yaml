@@ -18,6 +18,12 @@ jobs:
         with:
           python-version: "3.11"
 
+      # The flamapy wheels served to the browser are not tracked in git (see
+      # .gitignore); regenerate them from flamapy.version so the tests run
+      # against the same artifacts the browser loads.
+      - name: Build flamapy wheels
+        run: make build-wheels
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip setuptools wheel
