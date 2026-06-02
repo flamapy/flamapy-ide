@@ -18,4 +18,8 @@ jobs:
           # this is a built-in strategy in release-please, see "Action Inputs"
           # for more options
           release-type: node
-          token: ${{ secrets.RELEASE_TOKEN }}
+          # Built-in token (auto-provisioned, never expires). The job's
+          # permissions block below grants the contents/PR write access
+          # release-please needs. The Docker workflow still triggers because it
+          # listens on `workflow_run`, which fires regardless of the token used.
+          token: ${{ secrets.GITHUB_TOKEN }}
