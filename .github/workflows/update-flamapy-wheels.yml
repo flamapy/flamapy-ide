@@ -1,12 +1,13 @@
 name: Update flamapy wheels
 
-# Keeps the flamapy-authored wheels in public/flamapy/ in sync with the latest
-# flamapy release. Runs on a daily schedule and on demand; opens a pull request
-# whenever the bundle changes. Third-party deps and the z3_solver wasm wheel are
-# not touched (use `make build-wheels` for those).
+# Keeps the flamapy-authored wheels in public/flamapy/ in sync with the flamapy
+# release pinned in ./flamapy.version. Runs whenever that file changes and on
+# demand; opens a pull request whenever the bundle changes. Third-party deps and
+# the z3_solver wasm wheel are not touched (use `make build-wheels` for those).
 on:
-  schedule:
-    - cron: "0 6 * * *"   # daily at 06:00 UTC
+  push:
+    paths:
+      - "flamapy.version"
   workflow_dispatch:
 
 permissions:
@@ -34,11 +35,12 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           branch: chore/update-flamapy-wheels
           delete-branch: true
-          title: "chore: update flamapy wheels to the latest release"
-          commit-message: "chore: sync flamapy wheels with the latest flamapy release"
+          title: "chore: update flamapy wheels to the pinned release"
+          commit-message: "chore: sync flamapy wheels with the pinned flamapy release"
           body: |
             Automated update of the flamapy-authored wheels in `public/flamapy/`
-            from the latest [flamapy release](https://github.com/flamapy/flamapy/releases/latest).
+            from the [flamapy release](https://github.com/flamapy/flamapy/releases)
+            pinned in `flamapy.version`.
 
             Refreshed `flamapy`, `flamapy-fw`, `flamapy-fm`, `flamapy-sat`,
             `flamapy-bdd` and `flamapy-z3`, and rewrote the matching filenames in

@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""Update the committed flamapy-authored wheels from the latest flamapy release.
+"""Update the committed flamapy-authored wheels from a pinned flamapy release.
 
 The flamapy release pipeline attaches a ``flamapy-wheels-<tag>.zip`` asset to each
 GitHub release, containing the pure-python wheels of the flamapy-authored
 packages (flamapy + flamapy-fw/fm/sat/bdd/z3). This script:
 
-  1. resolves the latest *stable* release of ``flamapy/flamapy`` (prereleases and
-     drafts are ignored),
+  1. resolves which flamapy release to pull from -- the version pinned in
+     ``./flamapy.version`` (single source of truth, also read by the Makefile),
+     or the latest *stable* release when that file says ``latest``,
   2. downloads its wheels bundle,
   3. drops the new ``flamapy_*`` wheels into ``public/flamapy/`` and removes the
      superseded ones, and
@@ -21,26 +22,47 @@ The script is idempotent: re-running it when already up to date leaves the tree
 unchanged (so a CI job can simply open a PR when ``git`` reports a diff).
 
 Usage:
-    python scripts/update_flamapy_wheels.py            # fetch the latest release
+    python scripts/update_flamapy_wheels.py            # fetch the version in flamapy.version
     python scripts/update_flamapy_wheels.py --zip b.zip # use a local bundle (testing)
 
 Environment:
-    FLAMAPY_REPO        owner/name of the flamapy repo (default: flamapy/flamapy)
-    FLAMAPY_WHEELS_DIR  wheels directory (default: public/flamapy)
-    GITHUB_TOKEN        optional; raises the GitHub API rate limit
+    FLAMAPY_REPO          owner/name of the flamapy repo (default: flamapy/flamapy)
+    FLAMAPY_WHEELS_DIR    wheels directory (default: public/flamapy)
+    FLAMAPY_VERSION       overrides ./flamapy.version (e.g. "2.5.0" or "latest")
+    FLAMAPY_VERSION_FILE  path to the pinned-version file (default: flamapy.version)
+    GITHUB_TOKEN          optional; raises the GitHub API rate limit
 """
 import argparse
 import io
 import json
 import os
 import sys
+import urllib.error
 import urllib.request
 import zipfile
 from pathlib import Path
 
 REPO = os.environ.get("FLAMAPY_REPO", "flamapy/flamapy")
 WHEELS_DIR = Path(os.environ.get("FLAMAPY_WHEELS_DIR", "public/flamapy"))
+VERSION_FILE = Path(os.environ.get("FLAMAPY_VERSION_FILE", "flamapy.version"))
 USER_AGENT = "flamapy-ide-wheel-updater"
+
+
+def resolve_version() -> str:
+    """The flamapy version to pull, from $FLAMAPY_VERSION or ./flamapy.version.
+
+    Returns a version string (e.g. "2.5.0") or the sentinel "latest". Blank
+    lines and ``#`` comments in the file are ignored; the first real line wins.
+    """
+    env = os.environ.get("FLAMAPY_VERSION")
+    if env and env.strip():
+        return env.strip()
+    if VERSION_FILE.is_file():
+        for raw in VERSION_FILE.read_text().splitlines():
+            line = raw.split("#", 1)[0].strip()
+            if line:
+                return line
+    return "latest"
 
 
 def _request(url: str, accept: str | None = None) -> urllib.request.Request:
@@ -53,11 +75,37 @@ def _request(url: str, accept: str | None = None) -> urllib.request.Request:
     return req
 
 
-def fetch_latest_bundle() -> tuple[str, bytes]:
-    """Return (tag, zip_bytes) for the latest stable flamapy release bundle."""
-    api = f"https://api.github.com/repos/{REPO}/releases/latest"
-    with urllib.request.urlopen(_request(api, "application/vnd.github+json")) as resp:
-        release = json.load(resp)
+def _get_release(version: str) -> dict:
+    """Fetch the GitHub release JSON for ``version`` ("latest" or e.g. "2.5.0").
+
+    For a pinned version the release tag may be spelled ``2.5.0`` or ``v2.5.0``;
+    both are tried before giving up.
+    """
+    accept = "application/vnd.github+json"
+    if version == "latest":
+        api = f"https://api.github.com/repos/{REPO}/releases/latest"
+        with urllib.request.urlopen(_request(api, accept)) as resp:
+            return json.load(resp)
+
+    last_error: Exception | None = None
+    for tag in (version, f"v{version}"):
+        api = f"https://api.github.com/repos/{REPO}/releases/tags/{tag}"
+        try:
+            with urllib.request.urlopen(_request(api, accept)) as resp:
+                return json.load(resp)
+        except urllib.error.HTTPError as exc:  # 404 -> try the next spelling
+            last_error = exc
+            if exc.code != 404:
+                raise
+    raise SystemExit(
+        f"No release of {REPO} found for version '{version}' "
+        f"(tried tags '{version}' and 'v{version}'). {last_error}"
+    )
+
+
+def fetch_bundle(version: str) -> tuple[str, bytes]:
+    """Return (tag, zip_bytes) for the requested flamapy release bundle."""
+    release = _get_release(version)
     tag = release["tag_name"]
 
     assets = release.get("assets", [])
@@ -166,8 +214,10 @@ def main() -> int:
         print(f"Using local bundle: {args.zip_path}")
         zip_bytes = Path(args.zip_path).read_bytes()
     else:
-        tag, zip_bytes = fetch_latest_bundle()
-        print(f"Latest flamapy release: {tag}")
+        version = resolve_version()
+        print(f"Pinned flamapy version: {version}")
+        tag, zip_bytes = fetch_bundle(version)
+        print(f"Using flamapy release: {tag}")
 
     update(zip_bytes)
     return 0

@@ -1,11 +1,11 @@
 {
   "core": {
     "wheels": [
-      "flamapy_fw-2.5.0-py3-none-any.whl",
-      "flamapy_fm-2.5.0-py3-none-any.whl",
-      "flamapy-2.5.0-py3-none-any.whl",
+      "flamapy_fw-2.6.0.dev0-py3-none-any.whl",
+      "flamapy_fm-2.6.0.dev0-py3-none-any.whl",
+      "flamapy-2.6.0.dev0-py3-none-any.whl",
       "flamapy_configurator-2.0.1-py3-none-any.whl",
-      "uvlparser-2.0.1-py3-none-any.whl",
+      "uvlparser-2.5.0-py3-none-any.whl",
       "afmparser-1.0.3-py3-none-any.whl",
       "antlr4_python3_runtime-4.13.1-py3-none-any.whl",
       "graphviz-0.20-py3-none-any.whl",
@@ -15,23 +15,25 @@
   "plugins": {
     "sat": {
       "enabled": true,
-      "pyodide_packages": ["python-sat"],
+      "pyodide_packages": [
+        "python-sat"
+      ],
       "wheels": [
-        "flamapy_sat-2.5.0-py3-none-any.whl"
+        "flamapy_sat-2.6.0.dev0-py3-none-any.whl"
       ]
     },
     "bdd": {
       "enabled": true,
       "wheels": [
-        "flamapy_bdd-2.5.0-py3-none-any.whl",
+        "flamapy_bdd-2.6.0.dev0-py3-none-any.whl",
         "dd-0.6.0-py3-none-any.whl",
         "astutils-0.0.6-py3-none-any.whl"
       ]
     },
     "z3": {
-      "enabled": false,
+      "enabled": true,
       "wheels": [
-        "flamapy_z3-2.5.0-py3-none-any.whl",
+        "flamapy_z3-2.6.0.dev0-py3-none-any.whl",
         "z3_solver-4.13.4.0-py3-none-pyodide_2024_0_wasm32.whl"
       ]
     }

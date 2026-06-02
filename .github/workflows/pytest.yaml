@@ -21,8 +21,13 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip setuptools wheel
+          # Install the exact flamapy wheels served to the browser (not a PyPI
+          # pin), so the tests run against the shipped artifacts. The z3_solver
+          # wheel is WASM-only and cannot install natively, so it is excluded;
+          # the native z3-solver comes from requirements.txt instead.
+          pip install --no-deps $(ls public/flamapy/*.whl | grep -v 'wasm')
+          # Native solver backends + test tooling (python-sat, z3-solver, pytest).
           pip install -r requirements.txt
-          pip install --no-deps public/flamapy/flamapy_configurator-2.0.1-py3-none-any.whl
 
       - name: Run tests
         run: |

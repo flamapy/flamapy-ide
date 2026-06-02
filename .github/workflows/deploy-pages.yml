@@ -25,11 +25,21 @@ jobs:
           node-version: 20
           cache: npm
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
       - name: Configure Pages
         id: pages
         uses: actions/configure-pages@v5
 
       - run: npm ci
+
+      # The flamapy wheels served to the browser are not tracked in git (see
+      # .gitignore); regenerate them from flamapy.version before the build so
+      # Vite copies them into dist/.
+      - name: Build flamapy wheels
+        run: make build-wheels
 
       - name: Build
         env:
