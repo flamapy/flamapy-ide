@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import PropTypes from "prop-types";
 import * as d3 from "d3";
 
 const FeatureFlowMap = ({ data, width = 900, height = 500 }) => {
@@ -22,10 +23,6 @@ const FeatureFlowMap = ({ data, width = 900, height = 500 }) => {
 
     // ===== 3. Escalas =====
     const maxValue = d3.max(root.descendants(), d => d.value) || 1;
-
-    const nodeSizeScale = d3.scaleSqrt()
-      .domain([0, maxValue])
-      .range([5, 30]);
 
     const linkWidthScale = d3.scaleLinear()
       .domain([0, maxValue])
@@ -123,6 +120,12 @@ const FeatureFlowMap = ({ data, width = 900, height = 500 }) => {
       <svg ref={svgRef} width={width} height={height} />
     </div>
   );
+};
+
+FeatureFlowMap.propTypes = {
+  data: PropTypes.object,
+  width: PropTypes.number,
+  height: PropTypes.number,
 };
 
 export default FeatureFlowMap;

@@ -1,4 +1,4 @@
-import { useRef, useMemo } from 'react';
+import { useRef } from 'react';
 import PropTypes from 'prop-types';
 import {
   Chart as ChartJS,
