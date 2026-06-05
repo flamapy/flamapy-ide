@@ -32,23 +32,34 @@ jobs:
             echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
           fi
 
+      # QEMU lets the amd64 runner also build the linux/arm64 image (Apple Silicon,
+      # ARM servers); buildx is the multi-platform builder driving it.
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Log in to DockerHub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_API_TOKEN }}
 
-      - name: Build the Docker image
-        run: |
-          docker build . --file Dockerfile \
-            --tag flamapy/flamapy-ide:${{ steps.meta.outputs.version }} \
-            --tag flamapy/flamapy-ide:${{ steps.meta.outputs.moving }} \
-            --build-arg VITE_GA_MEASUREMENT_ID=${{ secrets.VITE_GA_MEASUREMENT_ID }}
-
-      - name: Push the Docker image
-        run: |
-          docker push flamapy/flamapy-ide:${{ steps.meta.outputs.version }}
-          docker push flamapy/flamapy-ide:${{ steps.meta.outputs.moving }}
+      - name: Build and push the multi-arch Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            flamapy/flamapy-ide:${{ steps.meta.outputs.version }}
+            flamapy/flamapy-ide:${{ steps.meta.outputs.moving }}
+          build-args: |
+            VITE_GA_MEASUREMENT_ID=${{ secrets.VITE_GA_MEASUREMENT_ID }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   github-release:
     name: Publish GitHub release

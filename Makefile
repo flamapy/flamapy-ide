@@ -4,9 +4,8 @@ WHEELS_DIR = assets
 # Output directory for flamapy plugin wheels served by the IDE
 FLAMAPY_WHEELS_DIR = public/flamapy
 
-# Flamapy package version to download from PyPI / fetch from GitHub releases.
+# Flamapy package version to download from PyPI.
 # Single source of truth: ./flamapy.version (one line, e.g. "2.5.0").
-# The update-flamapy-wheels script reads the same file.
 FLAMAPY_VERSION = $(shell sed -e 's/#.*//' -e '/^[[:space:]]*$$/d' flamapy.version | head -n1 | tr -d '[:space:]')
 
 # Core flamapy packages (pure-python, work in Pyodide as-is).
@@ -39,22 +38,11 @@ help:
 	@echo ""
 	@echo "Usage:"
 	@echo "  make build-wheels                         Download flamapy wheels from PyPI into $(FLAMAPY_WHEELS_DIR)"
-	@echo "  make update-flamapy-wheels                Sync flamapy-authored wheels from the flamapy.version release"
 	@echo "  make clean-old-wheels                     Remove wheels in $(FLAMAPY_WHEELS_DIR) not listed in plugins.conf.json"
 	@echo "  make dependencies PACKAGE=<package_name>  Download and build wheels for a package"
 	@echo "  make clean                                Remove all downloaded files in $(WHEELS_DIR)"
 	@echo "  make clean-tar                            Remove only source tarballs (.tar.gz, .zip)"
 	@echo "  make help                                 Show this help message"
-
-# Sync the flamapy-authored wheels (flamapy + fw/fm/sat/bdd/z3) with the flamapy
-# release pinned in ./flamapy.version by downloading its wheels bundle and
-# rewriting the matching filenames in plugins.conf.json.  Third-party deps and
-# the z3_solver wasm wheel are left untouched (use `make build-wheels` for those).
-# Convenience for a manual refresh; the Docker/Pages build keeps the manifest in
-# sync on its own (build-wheels runs the same rewrite via `--sync-local`).
-.PHONY: update-flamapy-wheels
-update-flamapy-wheels:
-	python scripts/update_flamapy_wheels.py
 
 # Download pure-python wheels from PyPI into public/flamapy/ so the IDE can
 # serve them via Pyodide/micropip.  Uses --no-deps so only the requested
@@ -95,7 +83,7 @@ build-wheels:
 	echo "Done: $$ok succeeded, $$fail failed."; \
 	[ $$fail -eq 0 ]
 	@echo "Generating plugins.conf.json from the template + downloaded wheels..."
-	@FLAMAPY_WHEELS_DIR=$(FLAMAPY_WHEELS_DIR) python3 scripts/update_flamapy_wheels.py --sync-local
+	@FLAMAPY_WHEELS_DIR=$(FLAMAPY_WHEELS_DIR) python3 scripts/generate_plugins_manifest.py
 	@$(MAKE) --no-print-directory clean-old-wheels
 	@echo "Wheels in $(FLAMAPY_WHEELS_DIR):"; \
 	ls $(FLAMAPY_WHEELS_DIR)/*.whl

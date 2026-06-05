@@ -16,7 +16,7 @@ FlamapyIDE is a web application for editing, visualizing, and performing Automat
 - **Guided configurator**: step-by-step product configuration with validity checking
 - **Import** feature models from Glencoe (`.gfm.json`), FeatureIDE (`.fide`/`.xml`), AFM (`.afm`), and JSON formats — converted to UVL automatically
 - **Export** to UVL, AFM, Glencoe, FeatureIDE, SPLOT, and JSON
-- **Real-time collaboration** (optional, requires a backend server)
+- **Real-time collaboration** (built into the Docker image; see [Collaboration backend](#collaboration))
 
 ---
 
@@ -179,23 +179,27 @@ The app is available at http://localhost:5173.
 
 ## Deploying with Docker
 
-### Build
+The production image is **self-contained**: nginx serves the app and reverse-proxies
+`/collab` to the [collaboration backend](#collaboration) running inside the same
+container. One image, one command, no Node on the host.
+
+### Build & run
 
 ```bash
-# Production
-docker build -t flamapy-ide:prod --target prod .
-
-# Development (hot-reload)
-docker build -t flamapy-ide:dev --target dev .
+docker build -t flamapy-ide .
+docker run --rm -p 8080:80 flamapy-ide
 ```
 
-### Run
+Open http://localhost:8080. Collaboration works out of the box — the WebSocket URL is
+derived from the page's own origin, so the same image works on `localhost` or any
+domain (use `wss://` behind a TLS-terminating proxy in production) without rebuilding.
+
+`docker compose up --build` does the same via `docker-compose.yml`.
+
+### Development image (hot-reload)
 
 ```bash
-# Production (Nginx on port 80)
-docker run -p 80:80 flamapy-ide:prod
-
-# Development (Vite on port 5173 with hot-reload)
+docker build -t flamapy-ide:dev --target dev .
 docker run -p 5173:5173 -v $(pwd):/app -v /app/node_modules flamapy-ide:dev
 ```
 
@@ -220,76 +224,41 @@ pytest --cov=public tests/
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `VITE_GA_MEASUREMENT_ID` | — | Google Analytics 4 measurement ID (optional, cookie-consent gated) |
-| `VITE_ENABLE_COLLAB` | `false` | Set to `"true"` to enable collaborative editing |
-| `VITE_COLLAB_URL` | `ws://localhost:1234` | WebSocket URL for the collaboration server |
+| `VITE_ENABLE_COLLAB` | `false` (`true` in the Docker image) | Set to `"true"` to enable collaborative editing |
+| `VITE_COLLAB_URL` | same origin (`ws(s)://<host>/collab`) | WebSocket URL for the collaboration server; override to point at an external server |
 
 See `.env.example` for a template.
 
 ---
 
-## Enabling Z3
+<a id="collaboration"></a>
+## Collaboration backend
 
-Z3 is disabled by default due to Pyodide/WASM compatibility constraints. To enable it:
+The collaboration server is a lightweight Node.js WebSocket server using Y.js. It keeps shared documents in memory and requires no database. It exposes a `/health` endpoint — the frontend pings it before creating a session to confirm the backend is reachable.
 
-1. Edit `public/flamapy/plugins.conf.json` and set `"enabled": true` for the `z3` plugin:
+### In the Docker image (default)
 
-```json
-"z3": {
-  "enabled": true,
-  "wheels": [
-    "flamapy_z3-2.5.0-py3-none-any.whl",
-    "z3_solver-4.13.4.0-py3-none-pyodide_2024_0_wasm32.whl"
-  ]
-}
-```
+Nothing to set up: the production image runs the collab server alongside nginx and proxies it at `/collab`, with collaboration enabled by default. Just `docker run` the image (see [Deploying with Docker](#deploying-with-docker)).
 
-2. Make sure the Pyodide-compatible Z3 wheel is present in `public/flamapy/`. The standard PyPI wheel **will not work** in WASM — you need the `pyodide_2024_0_wasm32` build. It must be obtained separately and placed manually (it is not downloaded by `make build-wheels`).
-
-Once enabled, a **Z3** tab appears in the Automated analysis section of the toolbar alongside SAT and BDD.
-
----
-
-## Setting up the collaboration backend
-
-The collaboration server is a lightweight Node.js WebSocket server using Y.js. It keeps shared documents in memory and requires no database.
-
-### Running the server
+### Standalone (local dev or scaling it out separately)
 
 ```bash
 npm install
-npm run collab:server
+npm run collab:server          # listens on 127.0.0.1:1234
+COLLAB_HOST=0.0.0.0 COLLAB_PORT=4000 npm run collab:server   # override host/port
 ```
 
-By default it listens on `127.0.0.1:1234`. Override with environment variables:
+Then run the frontend against it (in `npm run dev`, `VITE_*` are read at startup):
 
 ```bash
-COLLAB_HOST=0.0.0.0 COLLAB_PORT=4000 npm run collab:server
+VITE_ENABLE_COLLAB=true VITE_COLLAB_URL=ws://localhost:1234 npm run dev
 ```
 
-The server exposes a `/health` endpoint — the frontend pings it before creating a session to confirm the backend is reachable.
-
-### Running the frontend against it
-
-```bash
-VITE_ENABLE_COLLAB=true VITE_COLLAB_URL=ws://<server-host>:1234 npm run dev
-```
-
-Or set the variables in a `.env` file (see `.env.example`):
-
-```env
-VITE_ENABLE_COLLAB=true
-VITE_COLLAB_URL=ws://localhost:1234
-```
-
-### Production deployment
-
-When building for production, pass the variables at build time:
+Or set the variables in a `.env` file (see `.env.example`). For a production build pointing at an external server, pass them at build time and use `wss://` over HTTPS:
 
 ```bash
 VITE_ENABLE_COLLAB=true VITE_COLLAB_URL=wss://collab.yourdomain.com npm run build
 ```
-
-Use `wss://` (TLS) when deploying over HTTPS. The collab server should sit behind a reverse proxy (e.g. Nginx) that handles TLS termination.
 
 ---
 

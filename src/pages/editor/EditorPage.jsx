@@ -102,6 +102,16 @@ const EXPORT_OPERATIONS = [
   { label: "Download UVL", value: "uvl" },
 ];
 
+// Collaboration endpoint when VITE_COLLAB_URL is not set: derive it from the page's
+// own origin so the all-in-one Docker image (nginx proxies /collab to the bundled
+// collab server) works on localhost or any domain without a rebuild. Falls back to
+// the local dev server when there is no window (e.g. tests).
+function defaultCollabEndpoint() {
+  if (typeof window === "undefined") return "ws://localhost:1234";
+  const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+  return `${proto}//${window.location.host}/collab`;
+}
+
 function EditorPage({ selectedFile, setNavControls, darkMode }) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -109,7 +119,7 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
   const docIdFromQuery = searchParams.get("doc");
   const collabFeatureAvailable = import.meta.env.VITE_ENABLE_COLLAB === "true";
   const collabEnabled = collabFeatureAvailable && !!docIdFromQuery;
-  const collabEndpoint = import.meta.env.VITE_COLLAB_URL || "ws://localhost:1234";
+  const collabEndpoint = import.meta.env.VITE_COLLAB_URL || defaultCollabEndpoint();
   const collabConfig = collabEnabled
     ? { enabled: true, docId: docIdFromQuery, endpoint: collabEndpoint }
     : { enabled: false };
@@ -582,7 +592,9 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
       const wsUrl = new URL(collabEndpoint);
       const healthUrl = new URL(wsUrl);
       healthUrl.protocol = wsUrl.protocol === "wss:" ? "https:" : "http:";
-      healthUrl.pathname = "/health";
+      // Append /health to the endpoint path so it works for both a same-origin
+      // proxied endpoint (…/collab -> …/collab/health) and a bare host:port one.
+      healthUrl.pathname = `${wsUrl.pathname.replace(/\/+$/, "")}/health`;
       const res = await fetch(healthUrl.toString(), { mode: "cors" });
       return res.ok;
     } catch {
