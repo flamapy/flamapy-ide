@@ -23,10 +23,10 @@ jobs:
           password: ${{ secrets.DOCKERHUB_API_TOKEN }}
 
       - name: Build the Docker image
-        run: docker build . --file Dockerfile --tag frabenrui/flamapy-ide:latest
+        run: docker build . --file Dockerfile --tag flamapy/flamapy-ide:latest --build-arg VITE_GA_MEASUREMENT_ID=${{ secrets.VITE_GA_MEASUREMENT_ID }}
 
       - name: Push the Docker image
-        run: docker push frabenrui/flamapy-ide:latest
+        run: docker push flamapy/flamapy-ide:latest
 
   deploy:
     needs: build-and-publish

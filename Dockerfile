@@ -42,6 +42,12 @@ FROM base AS build
 # Set environment to production
 ENV NODE_ENV=production
 
+# Google Analytics 4 measurement ID. Vite inlines this into the static bundle at
+# build time, so it must be present here (not at container runtime). Passed via
+# --build-arg from a GitHub secret in CI; empty by default, which leaves GA off.
+ARG VITE_GA_MEASUREMENT_ID
+ENV VITE_GA_MEASUREMENT_ID=$VITE_GA_MEASUREMENT_ID
+
 # Pull in the regenerated wheels so Vite copies them into dist/
 COPY --from=wheels /app/public/flamapy ./public/flamapy
 
