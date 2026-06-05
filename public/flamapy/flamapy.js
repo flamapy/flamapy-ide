@@ -72,16 +72,25 @@ process_uvl_file('uvlfile.uvl')
     return result;
   }
 
-  async executeAction(action) {
+  async executeFacadeOperation(action) {
     if (this.isValid) {
+      this.pyodide.globals.set("facade_args", JSON.stringify(action.args || {}));
       const result = await this.pyodide.runPythonAsync(
-        `execute_pysat_operation('${action.value}')`
+        `execute_facade_operation('${action.method}', facade_args)`
       );
-      if (result.toJs) {
-        return { label: action.label, result: result.toJs() };
-      } else {
-        return { label: action.label, result };
-      }
+      return { label: action.label, result };
+    }
+  }
+
+  async executeFacadeOperationWithConfig(data) {
+    if (this.isValid) {
+      const { action, configs } = data;
+      this.pyodide.globals.set("facade_args", JSON.stringify(action.args || {}));
+      this.pyodide.globals.set("facade_configs", JSON.stringify(configs || {}));
+      const result = await this.pyodide.runPythonAsync(
+        `execute_facade_operation_with_config('${action.method}', facade_configs, facade_args)`
+      );
+      return { label: action.label, result };
     }
   }
 
@@ -108,7 +117,8 @@ process_uvl_file('uvlfile.uvl')
   }
 
   async getFeatures() {
-    return await this.pyodide.runPythonAsync(`get_features()`);
+    const result = await this.pyodide.runPythonAsync(`json.dumps(get_features())`);
+    return JSON.parse(result);
   }
 
   async getNumericalAttributes() {
@@ -125,20 +135,6 @@ process_uvl_file('uvlfile.uvl')
 
   async getFeatureFlowMap(data) {
     return await this.pyodide.runPythonAsync(`get_feature_flow_map(${JSON.stringify(data)})`);
-  }
-
-  async executeActionWithConf(data) {
-    if (this.isValid) {
-      this.pyodide.globals.set("configuration", data.configuration);
-      const result = await this.pyodide.runPythonAsync(
-        `execute_configurator_operation('${data.action.value}', configuration.to_py())`
-      );
-      if (result.toJs) {
-        return { label: data.action.label, result: result.toJs() };
-      } else {
-        return { label: data.action.label, result };
-      }
-    }
   }
 
   async executeAttributeOptimization(data) {

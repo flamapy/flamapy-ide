@@ -1,15 +1,12 @@
 import json, math, os
 from flamapy.interfaces.python import FLAMAFeatureModel
-from flamapy.core.exceptions import FlamaException
 from antlr4 import CommonTokenStream, FileStream
 from uvl.UVLCustomLexer import UVLCustomLexer
 from uvl.UVLPythonParser import UVLPythonParser
 from antlr4.error.ErrorListener import ErrorListener
 from flamapy.core.discover import DiscoverMetamodels
 from flamapy.metamodels.fm_metamodel.transformations import GlencoeReader, AFMReader, FeatureIDEReader, JSONReader, XMLReader, UVLReader, GlencoeWriter
-from flamapy.metamodels.configuration_metamodel.models import Configuration
 from flamapy.metamodels.configurator_metamodel.transformation import FmToConfigurator
-from collections import defaultdict
 from flamapy.metamodels.fm_metamodel.operations import FMLanguageLevel
 from flamapy.metamodels.fm_metamodel.models import AttributeType
 
@@ -112,41 +109,69 @@ def get_language_level(fm: FLAMAFeatureModel):
     return "{}{}".format(major_level, minors_suffix)
 
 
-def execute_pysat_operation(name: str):
-    dm = DiscoverMetamodels()
-    feature_model = fm.fm_model
-    if 'BDD' in name:
-        bdd_model = dm.use_transformation_m2m(feature_model, 'bdd')
-        operation = dm.get_operation(bdd_model, name)
-        operation.execute(bdd_model)
+def _facade_display_item(item):
+    """Render a single result item as a readable one-line string."""
+    if isinstance(item, dict):
+        return ", ".join("{}: {}".format(k, v) for k, v in item.items())
+    if isinstance(item, (list, tuple, set)):
+        return ", ".join(str(i) for i in item)
+    return str(item)
 
-    elif 'PySAT' in name:
-        if name in ['PySATConflictDetection', 'PySATDiagnosis']:
-            sat_model = dm.use_transformation_m2m(feature_model, "pysat_diagnosis")
-        else:
-            sat_model = dm.use_transformation_m2m(feature_model, "pysat")
-        # Get the operation
-        operation = dm.get_operation(sat_model, name)
-        # Execute the operation
-        operation.execute(sat_model)
-    
-    elif 'Z3' in name:
-        if not _z3_available:
-            return json.dumps("Z3 plugin is not installed.")
-        print(f"Executing Z3 operation {name}")
-        z3_model = dm.use_transformation_m2m(feature_model, "z3")
-        # Get the operation
-        operation = dm.get_operation(z3_model, name)
-        # Execute the operation
-        operation.execute(z3_model)
-        
-    # Get and print the result
-    result = operation.get_result()
-    if type(result) is list:
-        return json.dumps([str(conf) for conf in result])
-    if isinstance(result, (defaultdict, dict)):
-        return json.dumps(["{}: {}".format(str(k), str(v)) for k,v in result.items()])
-    return json.dumps(result)
+
+def _serialize_facade_result(result):
+    """JSON-serialize any facade result for display in the IDE output panel.
+
+    The facade returns ``None`` when an operation cannot be computed (missing
+    plugin or unsupported model); that is surfaced as a readable message.
+    """
+    if result is None:
+        return json.dumps(
+            "The operation could not be computed. The required plugin may be "
+            "unavailable or the operation may not be supported for this model."
+        )
+    if isinstance(result, bool) or isinstance(result, (int, float, str)):
+        return json.dumps(result)
+    if isinstance(result, dict):
+        return json.dumps(
+            ["{}: {}".format(k, _facade_display_item(v)) for k, v in result.items()]
+        )
+    if isinstance(result, (list, tuple, set)):
+        return json.dumps([_facade_display_item(i) for i in result])
+    return json.dumps(str(result))
+
+
+def execute_facade_operation(name: str, args_json: str = "{}"):
+    """Run any FLAMAFeatureModel facade method by name and JSON-serialize its result.
+
+    ``args_json`` is a JSON object whose keys are forwarded as keyword arguments
+    (e.g. {"backend": "sat"}). The facade hides backend selection and result
+    post-processing, so this single dispatcher replaces the per-backend routing.
+    """
+    args = json.loads(args_json) if args_json else {}
+    method = getattr(fm, name, None)
+    if not callable(method):
+        return json.dumps("Unknown operation '{}'.".format(name))
+    return _serialize_facade_result(method(**args))
+
+
+def execute_facade_operation_with_config(
+    name: str, configs_json: str = "{}", args_json: str = "{}"
+):
+    """Run a facade method that needs one or more configuration inputs.
+
+    ``configs_json`` maps each configuration keyword argument (e.g. "configuration_path",
+    "test_case_path") to a {feature: value} mapping, passed straight to the facade — which
+    accepts a mapping, a Configuration, or a path. ``args_json`` carries the remaining
+    scalar kwargs (e.g. backend, full_configuration, max_diagnoses).
+    """
+    args = json.loads(args_json) if args_json else {}
+    configs = json.loads(configs_json) if configs_json else {}
+    method = getattr(fm, name, None)
+    if not callable(method):
+        return json.dumps("Unknown operation '{}'.".format(name))
+    args.update(configs)
+    return _serialize_facade_result(method(**args))
+
 
 def execute_export_transformation(transformation: str):
     dm = DiscoverMetamodels()
@@ -276,32 +301,6 @@ def get_feature_flow_map(attribute_name: str):
     root = fm.fm_model.root
     result = build_node(root)
     print("Feature Flow Map result:", result)
-    return result
-
-def execute_configurator_operation(name: str, conf):
-    dm = DiscoverMetamodels()
-    feature_model = fm.fm_model
-    configuration = Configuration(conf)
-    if 'BDD' in name:
-        bdd_model = dm.use_transformation_m2m(feature_model, 'bdd')
-        operation = dm.get_operation(bdd_model, name)
-        operation.set_configuration(configuration)
-        operation.execute(bdd_model)
-
-    elif 'PySAT' in name:
-        if name in ['PySATConflictDetection', 'PySATDiagnosis']:
-            sat_model = dm.use_transformation_m2m(feature_model, "pysat_diagnosis")
-        else:
-            sat_model = dm.use_transformation_m2m(feature_model, "pysat")
-        # Get the operation
-        operation = dm.get_operation(sat_model, name)
-        operation.set_configuration(configuration)
-        # Execute the operation
-        operation.execute(sat_model)
-    # Get and print the result
-    result = operation.get_result()
-    if type(result) is list:
-        return [str(conf) for conf in result]
     return result
 
 def execute_attribute_optimization(attributes_goals):

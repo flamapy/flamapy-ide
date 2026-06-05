@@ -15,41 +15,84 @@ import FeatureInclusionProbabilitiesChart from "../../components/FeatureInclusio
 import FeatureFlowMap from "../../components/FeatureFlowMap";
 import ParetoFrontChart from "../../components/ParentoFrontChart";
 import ErrorBoundary from "../../components/ErrorBoundary";
+import OperationInputModal from "../../components/OperationInputModal";
 import JSZip from "jszip";
 import { useWorkerClient } from "../../hooks/useWorkerClient";
 
-// Full operation lists per solver — shown only when that plugin is enabled
-const ALL_SOLVER_OPERATIONS = {
-  sat: [
-    { label: "Configurations", value: "PySATConfigurations" },
-    { label: "Number of configurations", value: "PySATConfigurationsNumber" },
-    { label: "Dead features", value: "PySATDeadFeatures" },
-    { label: "Diagnosis", value: "PySATDiagnosis" },
-    { label: "False optional features", value: "PySATFalseOptionalFeatures" },
-    { label: "Satisfiable", value: "PySATSatisfiable" },
-  ],
-  bdd: [
-    { label: "Configurations", value: "BDDConfigurations" },
-    { label: "Number of configurations", value: "BDDConfigurationsNumber" },
-    { label: "Dead features", value: "BDDDeadFeatures" },
-    { label: "Satisfiable", value: "BDDSatisfiable" },
-    { label: "Configuration distribution", value: "BDDProductDistribution" },
-    { label: "Feature inclusion probability", value: "BDDFeatureInclusionProbability" },
-    { label: "Unique features", value: "BDDUniqueFeatures" },
-    { label: "Homogeneity", value: "BDDHomogeneity" },
-    { label: "Variability", value: "BDDVariability" },
-    { label: "Variant features", value: "BDDVariantFeatures" },
-  ],
-  z3: [
-    { label: "Satisfiable", value: "Z3Satisfiable" },
-    { label: "Configurations", value: "Z3Configurations" },
-    { label: "Number of configurations", value: "Z3ConfigurationsNumber" },
-    { label: "Core features", value: "Z3CoreFeatures" },
-    { label: "Dead features", value: "Z3DeadFeatures" },
-    { label: "False-optional features", value: "Z3FalseOptionalFeatures" },
-    { label: "Attribute optimization", value: "Z3AttributeOptimization" },
-  ],
-};
+// Canonical operation table — the single source of truth for every analysis the IDE
+// exposes. Each row is one FLAMAFeatureModel facade method (`method`); the per-solver
+// menus and any other capability-driven view derive from this array.
+//
+//  - No `solvers`  → FM-level structural operation, always available, no backend.
+//  - `solvers`     → backends that implement it. The facade takes a `backend` kwarg
+//                    exactly when more than one backend supports the operation, so
+//                    `backendAware` is derived (see operationsForSolver) rather than set.
+//  - `engine: "legacy"` → not yet on the facade (needs extra UI: config input or a
+//                    dedicated modal); dispatched by the raw class name in `value`.
+//  - `input`       → the operation needs one extra argument collected from the user
+//                    before running: { kind: "feature"|"integer", arg, prompt, min? }.
+//                    `arg` is the facade keyword the collected value is passed as.
+const OPERATIONS = [
+  // FM-level structural operations (flamapy-fm is always present)
+  { method: "metrics", label: "Metrics" },
+  { method: "atomic_sets", label: "Atomic sets" },
+  { method: "variation_points", label: "Variation points" },
+  { method: "leaf_features", label: "Leaf features" },
+  { method: "average_branching_factor", label: "Average branching factor" },
+  { method: "count_leafs", label: "Leaf count" },
+  { method: "max_depth", label: "Max depth" },
+  { method: "estimated_number_of_configurations", label: "Estimated configurations" },
+  { method: "feature_ancestors", label: "Feature ancestors",
+    input: { kind: "feature", arg: "feature_name", prompt: "Select a feature" } },
+
+  // Analysis operations — `solvers` is the single source of truth for backend support
+  { method: "satisfiable", label: "Satisfiable", solvers: ["sat", "bdd", "z3"] },
+  { method: "configurations", label: "Configurations", solvers: ["sat", "bdd", "z3"] },
+  { method: "configurations_number", label: "Number of configurations", solvers: ["sat", "bdd", "z3"] },
+  { method: "dead_features", label: "Dead features", solvers: ["sat", "bdd", "z3"] },
+  { method: "core_features", label: "Core features", solvers: ["sat", "z3"] },
+  { method: "false_optional_features", label: "False optional features", solvers: ["sat", "z3"] },
+  { method: "sampling", label: "Sampling", solvers: ["sat", "bdd"],
+    input: { kind: "integer", arg: "size", prompt: "Sample size", min: 1 } },
+  { method: "backbone", label: "Backbone", solvers: ["sat"] },
+  { method: "unique_features", label: "Unique features", solvers: ["bdd"] },
+  { method: "variant_features", label: "Variant features", solvers: ["bdd"] },
+  { method: "pure_optional_features", label: "Pure optional features", solvers: ["bdd"] },
+  { method: "homogeneity", label: "Homogeneity", solvers: ["bdd"] },
+  { method: "variability", label: "Variability", solvers: ["bdd"] },
+  { method: "configurations_with_n_features", label: "Configurations with N features", solvers: ["bdd"],
+    input: { kind: "integer", arg: "n", prompt: "Number of selected features", min: 0 } },
+  { method: "all_feature_bounds", label: "Feature bounds (all)", solvers: ["z3"] },
+  { method: "feature_bounds", label: "Feature bounds", solvers: ["z3"],
+    input: { kind: "feature", arg: "variable_name", prompt: "Select a feature" } },
+
+  // Attribute optimization opens a dedicated modal (handled in executeAction).
+  { value: "Z3AttributeOptimization", label: "Attribute optimization", solvers: ["z3"], engine: "legacy" },
+];
+
+// FM-level operations: no backend, always available.
+const STRUCTURAL_OPERATIONS = OPERATIONS.filter((op) => !op.solvers);
+
+// Analysis operations supported by a given solver, with `backendAware` derived from
+// the capability table (a facade method takes a backend kwarg iff >1 backend has it).
+const operationsForSolver = (solver) =>
+  OPERATIONS.filter((op) => op.solvers?.includes(solver)).map((op) => ({
+    ...op,
+    backendAware: op.solvers.length > 1,
+  }));
+
+// Configuration-input operations — run from the configuration panel against the tree's
+// current selection (a {feature: value} mapping). A `method` entry runs that mapping
+// through the facade; a `value` entry drives a UI-only flow (wizard, download).
+const CONFIG_OPERATIONS = [
+  { label: "Valid configuration", method: "satisfiable_configuration" },
+  { label: "Filter", method: "filter" },
+  { label: "Commonality", method: "commonality" },
+  { label: "Diagnosis", method: "diagnosis" },
+  { label: "Conflict", method: "conflict" },
+  { label: "Interactive Configuration", value: "configurator" },
+  { label: "Download Configurator", value: "downloadConfigurator" },
+];
 
 const EXPORT_OPERATIONS = [
   { label: "AFM", value: "afm" },
@@ -95,6 +138,9 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
 
   // Plugin config synced from worker on load
   const [enabledPlugins, setEnabledPlugins] = useState({ sat: true, bdd: true, z3: false });
+
+  // Operation-argument modal state ({ action, options } while open, else null)
+  const [inputModal, setInputModal] = useState(null);
 
   // Z3 attribute optimization modal state
   const [isAttrOptModalOpen, setIsAttrOptModalOpen] = useState(false);
@@ -313,16 +359,46 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
     //   return;
     // }
 
+    if (action.input) {
+      // Operation needs an extra argument: collect it via a modal, then run.
+      let options = [];
+      if (action.input.kind === "feature") {
+        try {
+          options = await call("getFeatures");
+        } catch (error) {
+          setOutput({ label: action.label, result: error.message });
+          return;
+        }
+      }
+      setInputModal({ action, options });
+      return;
+    }
+
+    runOperation(action);
+  }
+
+  async function runOperation(action) {
     setIsRunning(true);
     setOutput({ label: action.label, result: "Executing operation" });
     try {
-      const result = await call("executeAction", action);
+      // Forward the selected solver only to backend-aware operations, merged with any
+      // argument already collected for the operation.
+      const data = action.backendAware
+        ? { ...action, args: { ...(action.args || {}), backend: selectedSolver } }
+        : action;
+      const result = await call("executeFacadeOperation", data);
       result.result = JSON.parse(result.result);
       setOutput(result);
     } catch {
       setOutput({ label: action.label, result: "An exception occurred. Check the model definition." });
     }
     setIsRunning(false);
+  }
+
+  function confirmInputOperation(value) {
+    const { action } = inputModal;
+    setInputModal(null);
+    runOperation({ ...action, args: { ...(action.args || {}), [action.input.arg]: value } });
   }
 
   async function executeActionWithConf(action, configuration) {
@@ -333,11 +409,13 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
       return;
     }
 
-    if (action.isOperationWithConf) {
+    if (action.method) {
       setIsRunning(true);
       setOutput({ label: action.label, result: "Executing operation" });
       try {
-        const result = await call("executeActionWithConf", { action, configuration });
+        const configs = { configuration_path: configuration };
+        const result = await call("executeFacadeOperationWithConfig", { action, configs });
+        result.result = JSON.parse(result.result);
         setOutput(result);
       } catch {
         setOutput({ label: action.label, result: "An exception occurred. Check the model definition." });
@@ -622,6 +700,19 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
           </div>
 
           <div className="flex flex-col gap-1 whitespace-nowrap">
+            <span className="text-[11px] text-gray-600 dark:text-gray-300 text-center w-full">Structural</span>
+            <div className="h-px bg-gray-300 dark:bg-gray-600 w-full" />
+            <div className="flex rounded overflow-hidden border border-gray-300 dark:border-gray-600">
+              <DropdownMenu
+                buttonLabel="Structural operation"
+                options={STRUCTURAL_OPERATIONS}
+                executeAction={executeAction}
+                className="bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 py-2 px-3 rounded-none shadow-none w-[170px] justify-between"
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-1 whitespace-nowrap">
             <span className="text-[11px] text-gray-600 dark:text-gray-300 text-center w-full">Automated analysis</span>
             <div className="h-px bg-gray-300 dark:bg-gray-600 w-full" />
             <div className="flex items-stretch rounded overflow-hidden border border-gray-300 dark:border-gray-600">
@@ -638,7 +729,7 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
               ))}
               <DropdownMenu
                 buttonLabel="Analysis operation"
-                options={ALL_SOLVER_OPERATIONS[selectedSolver] ?? []}
+                options={operationsForSolver(selectedSolver)}
                 executeAction={executeAction}
                 className="bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 py-2 px-3 rounded-none shadow-none w-[170px] justify-between border-l"
               />
@@ -743,7 +834,7 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
 
         {showConfiguratorPanel && (
           <div className="relative h-full">
-            <TreeView treeData={featureTree} executeAction={executeActionWithConf} history={history} />
+            <TreeView treeData={featureTree} executeAction={executeActionWithConf} operations={CONFIG_OPERATIONS} history={history} />
             {currentView !== "configurator" && (
               <button
                 className="absolute right-[-12px] top-1/2 -translate-y-1/2 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 text-[10px] px-1 py-10 rounded-r shadow hover:bg-gray-400 dark:hover:bg-gray-500 rotate-180 [writing-mode:vertical-rl]"
@@ -970,6 +1061,14 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
             </div>
           </div>
         </div>
+      )}
+      {inputModal && (
+        <OperationInputModal
+          action={inputModal.action}
+          options={inputModal.options}
+          onConfirm={confirmInputOperation}
+          onCancel={() => setInputModal(null)}
+        />
       )}
     </div>
   );

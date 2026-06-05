@@ -94,25 +94,7 @@ const TreeNode = ({ node, statusMap, setStatusMap, history }) => {
 };
 
 // TreeView component
-const TreeView = ({ treeData, executeAction, history }) => {
-  const SATOperations = [
-    {
-      label: "Valid Configuration",
-      value: "PySATSatisfiableConfiguration",
-      isOperationWithConf: true,
-    },
-    {
-      label: "Interactive Configuration",
-      value: "configurator",
-      isOperationWithConf: false,
-    },
-    {
-      label: "Download Configurator",
-      value: "downloadConfigurator",
-      isOperationWithConf: false,
-    },
-  ];
-
+const TreeView = ({ treeData, executeAction, operations, history }) => {
   const [statusMap, setStatusMap] = useState({});
   const [panelHeight, setPanelHeight] = useState(() =>
     typeof window !== "undefined" ? Math.max(400, window.innerHeight - 140) : 600
@@ -146,7 +128,7 @@ const TreeView = ({ treeData, executeAction, history }) => {
       <div className="space-y-4 h-full">
         <DropdownMenu
           buttonLabel={"Configuration Operations"}
-          options={SATOperations}
+          options={operations}
           executeAction={(action) => executeAction(action, statusMap)}
         />
 

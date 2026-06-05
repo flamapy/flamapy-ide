@@ -15,8 +15,10 @@ self.onmessage = async (event) => {
     let results;
     if (action === "validateModel") {
       results = await self.flamapy.validateModel(data);
-    } else if (action === "executeAction") {
-      results = await self.flamapy.executeAction(data);
+    } else if (action === "executeFacadeOperation") {
+      results = await self.flamapy.executeFacadeOperation(data);
+    } else if (action === "executeFacadeOperationWithConfig") {
+      results = await self.flamapy.executeFacadeOperationWithConfig(data);
     } else if (action === "downloadFile") {
       results = await self.flamapy.downloadFile(data);
     } else if (action === "importModel") {
@@ -43,8 +45,6 @@ self.onmessage = async (event) => {
       const proxy = await self.flamapy.getFeatureFlowMap(data);
       results = proxy.toJs({ dict_converter: Object.fromEntries });
       if (proxy.destroy) proxy.destroy();
-    } else if (action === "executeActionWithConf") {
-      results = await self.flamapy.executeActionWithConf(data);
     } else if (action === "executeAttributeOptimization") {
       const response = await self.flamapy.executeAttributeOptimization(data);
       results = JSON.parse(JSON.stringify(response));
