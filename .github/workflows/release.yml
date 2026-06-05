@@ -64,7 +64,8 @@ jobs:
   github-release:
     name: Publish GitHub release
     needs: docker
-    if: needs.docker.outputs.is_prerelease == 'false'
+    # Runs for every tag: real tags become full releases, .dev tags become
+    # GitHub pre-releases (see prerelease/make_latest below).
     runs-on: ubuntu-latest
     # The repo's default GITHUB_TOKEN is read-only; creating a release needs write.
     permissions:
@@ -94,7 +95,9 @@ jobs:
           # Fall back to GitHub's auto-generated notes if the changelog step failed.
           body: ${{ steps.changelog.outputs.changes }}
           generate_release_notes: ${{ steps.changelog.outcome != 'success' }}
-          make_latest: 'true'
+          # .dev tags publish as pre-releases and never become the "latest" release.
+          prerelease: ${{ needs.docker.outputs.is_prerelease == 'true' }}
+          make_latest: ${{ needs.docker.outputs.is_prerelease == 'false' }}
 
   deploy-render:
     name: Trigger Render deploy
