@@ -50,7 +50,8 @@ help:
 # release pinned in ./flamapy.version by downloading its wheels bundle and
 # rewriting the matching filenames in plugins.conf.json.  Third-party deps and
 # the z3_solver wasm wheel are left untouched (use `make build-wheels` for those).
-# This is the same script the "Update flamapy wheels" GitHub workflow runs.
+# Convenience for a manual refresh; the Docker/Pages build keeps the manifest in
+# sync on its own (build-wheels runs the same rewrite via `--sync-local`).
 .PHONY: update-flamapy-wheels
 update-flamapy-wheels:
 	python scripts/update_flamapy_wheels.py
@@ -93,6 +94,8 @@ build-wheels:
 	echo ""; \
 	echo "Done: $$ok succeeded, $$fail failed."; \
 	[ $$fail -eq 0 ]
+	@echo "Generating plugins.conf.json from the template + downloaded wheels..."
+	@FLAMAPY_WHEELS_DIR=$(FLAMAPY_WHEELS_DIR) python3 scripts/update_flamapy_wheels.py --sync-local
 	@$(MAKE) --no-print-directory clean-old-wheels
 	@echo "Wheels in $(FLAMAPY_WHEELS_DIR):"; \
 	ls $(FLAMAPY_WHEELS_DIR)/*.whl

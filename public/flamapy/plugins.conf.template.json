@@ -1,0 +1,41 @@
+{
+  "core": {
+    "wheels": [
+      "flamapy_fw",
+      "flamapy_fm",
+      "flamapy",
+      "flamapy_configurator",
+      "uvlparser",
+      "afmparser",
+      "antlr4_python3_runtime",
+      "graphviz",
+      "ply"
+    ]
+  },
+  "plugins": {
+    "sat": {
+      "enabled": true,
+      "pyodide_packages": [
+        "python-sat"
+      ],
+      "wheels": [
+        "flamapy_sat"
+      ]
+    },
+    "bdd": {
+      "enabled": true,
+      "wheels": [
+        "flamapy_bdd",
+        "dd",
+        "astutils"
+      ]
+    },
+    "z3": {
+      "enabled": true,
+      "wheels": [
+        "flamapy_z3",
+        "z3_solver"
+      ]
+    }
+  }
+}

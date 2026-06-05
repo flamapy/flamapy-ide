@@ -1,29 +1,34 @@
 #!/usr/bin/env python3
-"""Update the committed flamapy-authored wheels from a pinned flamapy release.
+"""Generate the served plugins.conf.json from wheels + the tracked template.
 
-The flamapy release pipeline attaches a ``flamapy-wheels-<tag>.zip`` asset to each
-GitHub release, containing the pure-python wheels of the flamapy-authored
-packages (flamapy + flamapy-fw/fm/sat/bdd/z3). This script:
+The browser loader (``public/flamapy/flamapy.js``) fetches ``plugins.conf.json`` and
+``micropip.install``s the exact wheel filenames it lists. Those filenames embed
+versions, so they are build artifacts -- not source. The repo therefore tracks only
+``plugins.conf.template.json`` (the same structure, but each wheel listed by bare
+distribution name, e.g. ``flamapy_fw``); the versioned ``plugins.conf.json`` and the
+``flamapy_*`` wheels themselves are gitignored and produced at build time.
 
-  1. resolves which flamapy release to pull from -- the version pinned in
-     ``./flamapy.version`` (single source of truth, also read by the Makefile),
-     or the latest *stable* release when that file says ``latest``,
-  2. downloads its wheels bundle,
-  3. drops the new ``flamapy_*`` wheels into ``public/flamapy/`` and removes the
-     superseded ones, and
-  4. rewrites the matching versioned filenames inside ``plugins.conf.json``,
-     preserving its curated grouping, ``enabled`` flags and ``pyodide_packages``.
+This script has two entry points, both of which end by resolving the template
+against the wheels on disk and writing ``plugins.conf.json``:
 
-Third-party dependencies (uvlparser, dd, ply, …), the vendored
-``flamapy-configurator`` wheel and the ``z3_solver`` wasm wheel are left
-untouched -- they are not part of the flamapy release bundle.
+  --sync-local   regenerate the manifest from wheels already in the wheels dir.
+                 Run by ``make build-wheels`` right after it downloads the wheels
+                 pinned in ``./flamapy.version``; this is the normal build path.
 
-The script is idempotent: re-running it when already up to date leaves the tree
-unchanged (so a CI job can simply open a PR when ``git`` reports a diff).
+  (default)      download the ``flamapy-wheels-<tag>.zip`` asset attached to a
+                 flamapy GitHub release (tag from ``./flamapy.version``, or the
+                 latest stable when that file says ``latest``), drop its wheels
+                 into the wheels dir, regenerate the manifest and prune stale
+                 wheels. A manual convenience (``make update-flamapy-wheels``).
+
+Third-party deps (uvlparser, dd, ply, …), the vendored ``flamapy-configurator``
+wheel and the ``z3_solver`` wasm wheel must also appear in the template (by name)
+to be loaded; ``make build-wheels`` / the vendored files provide them on disk.
 
 Usage:
-    python scripts/update_flamapy_wheels.py            # fetch the version in flamapy.version
-    python scripts/update_flamapy_wheels.py --zip b.zip # use a local bundle (testing)
+    python scripts/update_flamapy_wheels.py --sync-local # build path (from wheels on disk)
+    python scripts/update_flamapy_wheels.py              # download the pinned release bundle
+    python scripts/update_flamapy_wheels.py --zip b.zip  # use a local bundle (testing)
 
 Environment:
     FLAMAPY_REPO          owner/name of the flamapy repo (default: flamapy/flamapy)
@@ -46,6 +51,11 @@ REPO = os.environ.get("FLAMAPY_REPO", "flamapy/flamapy")
 WHEELS_DIR = Path(os.environ.get("FLAMAPY_WHEELS_DIR", "public/flamapy"))
 VERSION_FILE = Path(os.environ.get("FLAMAPY_VERSION_FILE", "flamapy.version"))
 USER_AGENT = "flamapy-ide-wheel-updater"
+
+# The tracked template lists wheels by distribution name only (no versions); the
+# served manifest with resolved, versioned filenames is generated and gitignored.
+TEMPLATE_PATH = WHEELS_DIR / "plugins.conf.template.json"
+CONF_PATH = WHEELS_DIR / "plugins.conf.json"
 
 
 def resolve_version() -> str:
@@ -131,46 +141,75 @@ def package_key(wheel_filename: str) -> str:
     return wheel_filename.split("-", 1)[0]
 
 
+def _wheel_lists(conf: dict) -> list[list]:
+    """Every wheel list referenced by the manifest (core + plugins)."""
+    lists = [conf["core"]["wheels"]]
+    lists += [plugin["wheels"] for plugin in conf["plugins"].values()]
+    return lists
+
+
+def generate_manifest(wheel_filenames: list[str]) -> None:
+    """Generate the served plugins.conf.json from the tracked template.
+
+    The template lists each wheel by *distribution name* only (e.g. ``flamapy_fw``),
+    so the repo never tracks versioned, build-produced filenames. This resolves each
+    name against the wheels actually present and writes the runtime manifest that the
+    browser loader fetches. Raises SystemExit if a templated package has no wheel.
+    """
+    template = json.loads(TEMPLATE_PATH.read_text())
+    by_key = {package_key(name): name for name in wheel_filenames}
+
+    missing: list[str] = []
+    resolved_keys: set[str] = set()
+    for wheels in _wheel_lists(template):
+        for i, key in enumerate(wheels):  # template entries are bare distribution names
+            resolved = by_key.get(key)
+            if resolved is None:
+                missing.append(key)
+                continue
+            wheels[i] = resolved
+            resolved_keys.add(key)
+
+    if missing:
+        raise SystemExit(
+            f"No wheel found in {WHEELS_DIR} for templated package(s): "
+            + ", ".join(sorted(set(missing)))
+            + "\nRun `make build-wheels` to fetch them."
+        )
+
+    unused = sorted(set(by_key) - resolved_keys)
+    if unused:
+        print(
+            "WARNING: wheels present but not listed in plugins.conf.template.json "
+            "(add them there if the browser should load them): "
+            + ", ".join(by_key[k] for k in unused),
+            file=sys.stderr,
+        )
+
+    # Write the generated manifest (2-space indent + trailing newline, matching the repo).
+    CONF_PATH.write_text(json.dumps(template, indent=2) + "\n")
+    print(f"Generated {CONF_PATH} ({len(resolved_keys)} wheels resolved).")
+
+
+def _prune_unreferenced() -> None:
+    """Delete wheels in WHEELS_DIR not referenced by the generated manifest."""
+    conf = json.loads(CONF_PATH.read_text())
+    referenced = {fn for wheels in _wheel_lists(conf) for fn in wheels}
+    for whl in sorted(WHEELS_DIR.glob("*.whl")):
+        if whl.name not in referenced:
+            whl.unlink()
+            print(f"  Removed stale wheel: {whl.name}")
+
+
 def update(zip_bytes: bytes) -> bool:
-    """Apply the bundle to WHEELS_DIR + plugins.conf.json. Returns True if the
-    bundle contained wheels (regardless of whether anything changed on disk)."""
-    conf_path = WHEELS_DIR / "plugins.conf.json"
-    conf = json.loads(conf_path.read_text())
+    """Extract the release bundle into WHEELS_DIR and regenerate the manifest.
 
-    # Collect the wheel lists referenced by the manifest.
-    wheel_lists = [conf["core"]["wheels"]]
-    wheel_lists += [plugin["wheels"] for plugin in conf["plugins"].values()]
-
+    Returns True if the bundle contained wheels."""
     with zipfile.ZipFile(io.BytesIO(zip_bytes)) as bundle:
         bundle_wheels = [os.path.basename(n) for n in bundle.namelist() if n.endswith(".whl")]
         if not bundle_wheels:
             print("Bundle contains no wheels.", file=sys.stderr)
             return False
-
-        new_by_key = {package_key(name): name for name in bundle_wheels}
-
-        # Rewrite the manifest filenames in place, tracking replacements.
-        replaced: dict[str, str] = {}   # old filename -> new filename
-        matched_keys: set[str] = set()
-        for wheels in wheel_lists:
-            for i, filename in enumerate(wheels):
-                key = package_key(filename)
-                new_name = new_by_key.get(key)
-                if new_name is None:
-                    continue  # third-party dep / not in bundle -> leave it
-                matched_keys.add(key)
-                if new_name != filename:
-                    wheels[i] = new_name
-                    replaced[filename] = new_name
-
-        unreferenced = sorted(set(new_by_key) - matched_keys)
-        if unreferenced:
-            print(
-                "WARNING: bundle wheels not referenced in plugins.conf.json "
-                "(add them to the manifest manually if they should load): "
-                + ", ".join(new_by_key[k] for k in unreferenced),
-                file=sys.stderr,
-            )
 
         # Write every bundle wheel into the wheels directory.
         WHEELS_DIR.mkdir(parents=True, exist_ok=True)
@@ -181,23 +220,24 @@ def update(zip_bytes: bytes) -> bool:
             with bundle.open(member) as src:
                 target.write_bytes(src.read())
 
-    # Persist the manifest (2-space indent + trailing newline, matching the repo).
-    conf_path.write_text(json.dumps(conf, indent=2) + "\n")
+    generate_manifest(sorted(p.name for p in WHEELS_DIR.glob("*.whl")))
+    _prune_unreferenced()
+    return True
 
-    # Remove superseded wheel files that are no longer referenced anywhere.
-    still_referenced = {fn for wheels in wheel_lists for fn in wheels}
-    for old_name in replaced:
-        if old_name not in still_referenced:
-            stale = WHEELS_DIR / old_name
-            if stale.exists():
-                stale.unlink()
 
-    if replaced:
-        print("Updated wheels:")
-        for old, new in sorted(replaced.items()):
-            print(f"  {old}  ->  {new}")
-    else:
-        print("Already up to date; no wheel filenames changed.")
+def sync_local() -> bool:
+    """Generate plugins.conf.json from the wheels already present in WHEELS_DIR.
+
+    Used at build time (``make build-wheels``): the wheels are freshly downloaded at
+    the pinned ``flamapy.version``, and this resolves the tracked template against
+    them. The served manifest is thus a build artifact, never committed. Returns True
+    if any wheels were found.
+    """
+    local = sorted(p.name for p in WHEELS_DIR.glob("*.whl"))
+    if not local:
+        print(f"No wheels found in {WHEELS_DIR}; nothing to generate.", file=sys.stderr)
+        return False
+    generate_manifest(local)
     return True
 
 
@@ -208,7 +248,16 @@ def main() -> int:
         dest="zip_path",
         help="Use a local wheels bundle instead of downloading the latest release.",
     )
+    parser.add_argument(
+        "--sync-local",
+        action="store_true",
+        help="Don't download anything; just rewrite plugins.conf.json to match the "
+             "wheels already present in the wheels directory (used by build-wheels).",
+    )
     args = parser.parse_args()
+
+    if args.sync_local:
+        return 0 if sync_local() else 1
 
     if args.zip_path:
         print(f"Using local bundle: {args.zip_path}")

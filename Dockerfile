@@ -33,6 +33,7 @@ CMD ["npm", "run", "dev", "--", "--host"]
 FROM python:3.11 AS wheels
 WORKDIR /app
 COPY Makefile flamapy.version ./
+COPY scripts ./scripts
 COPY public/flamapy ./public/flamapy
 RUN make build-wheels
 
