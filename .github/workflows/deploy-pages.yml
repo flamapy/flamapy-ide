@@ -1,8 +1,12 @@
 name: Deploy to GitHub Pages
 
+# Production deploy is tag-driven: a non-dev version tag (v1.2.3) publishes the
+# site. Dev tags (v1.2.3.dev0) are previews and do not deploy. Pushing to main
+# no longer deploys.
 on:
   push:
-    branches: [main]
+    tags:
+      - v[0-9]+.[0-9]+.*
   workflow_dispatch:
 
 permissions:
@@ -17,6 +21,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' || !contains(github.ref, 'dev') }}
     steps:
       - uses: actions/checkout@v4
 
@@ -44,6 +49,9 @@ jobs:
       - name: Build
         env:
           VITE_BASE_PATH: ${{ steps.pages.outputs.base_path }}/
+          # GA4 measurement ID, inlined by Vite at build time (empty -> GA off),
+          # matching the Docker build so the Pages site reports analytics too.
+          VITE_GA_MEASUREMENT_ID: ${{ secrets.VITE_GA_MEASUREMENT_ID }}
         run: npm run build
 
       - name: SPA fallback

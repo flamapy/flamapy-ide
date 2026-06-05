@@ -1,0 +1,86 @@
+name: Release
+
+# Tag-driven release, mirroring the .dev tag schema of the flamapy packages.
+#   v1.2.3       -> docker :latest + :1.2.3, GitHub release, Render deploy
+#   v1.2.3.dev0  -> docker :dev    + :1.2.3.dev0 only (preview, no release/deploy)
+# Pushing to main no longer deploys; push a version tag to ship.
+on:
+  push:
+    tags:
+      - v[0-9]+.[0-9]+.*
+
+jobs:
+  docker:
+    name: Build & publish Docker image
+    runs-on: ubuntu-latest
+    outputs:
+      is_prerelease: ${{ steps.meta.outputs.is_prerelease }}
+    steps:
+      - name: Checkout the code
+        uses: actions/checkout@v4
+
+      - name: Compute image tags
+        id: meta
+        run: |
+          VERSION=${GITHUB_REF_NAME}
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if [[ "$VERSION" == *dev* ]]; then
+            echo "moving=dev" >> "$GITHUB_OUTPUT"
+            echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "moving=latest" >> "$GITHUB_OUTPUT"
+            echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Log in to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_API_TOKEN }}
+
+      - name: Build the Docker image
+        run: |
+          docker build . --file Dockerfile \
+            --tag flamapy/flamapy-ide:${{ steps.meta.outputs.version }} \
+            --tag flamapy/flamapy-ide:${{ steps.meta.outputs.moving }} \
+            --build-arg VITE_GA_MEASUREMENT_ID=${{ secrets.VITE_GA_MEASUREMENT_ID }}
+
+      - name: Push the Docker image
+        run: |
+          docker push flamapy/flamapy-ide:${{ steps.meta.outputs.version }}
+          docker push flamapy/flamapy-ide:${{ steps.meta.outputs.moving }}
+
+  github-release:
+    name: Publish GitHub release
+    needs: docker
+    if: needs.docker.outputs.is_prerelease == 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout git repo
+        uses: actions/checkout@v4
+
+      - name: Generate changelog
+        id: changelog
+        uses: Requarks/changelog-action@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ github.ref_name }}
+          writeToFile: 'false'
+
+      - name: Publish release github
+        uses: softprops/action-gh-release@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag_name: ${{ github.ref_name }}
+          body: ${{ steps.changelog.outputs.changes }}
+
+  deploy-render:
+    name: Trigger Render deploy
+    needs: docker
+    if: needs.docker.outputs.is_prerelease == 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy
+        env:
+          deploy_url: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: curl "$deploy_url"
