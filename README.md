@@ -39,6 +39,7 @@ FlamapyIDE is a web application for editing, visualizing, and performing Automat
 - **Configuration-driven operations**: valid configuration, filter, commonality, diagnosis, and conflict, run against the configurator's current selection
 - **Metrics views**: configuration distribution chart, feature inclusion probability chart, and a feature flow map of attribute values
 - **Guided configurator**: step-by-step product configuration with validity checking
+- **Pluggable compute backend**: run analysis in-browser (default) or offload it to a remote [flamapy-rest](https://github.com/flamapy/flamapy_rest) API (configurable URL, default `rest.flamapy.org`)
 - **Import** feature models from Glencoe (`.gfm.json`), FeatureIDE (`.fide`/`.xml`), AFM (`.afm`), and JSON formats — converted to UVL automatically
 - **Export** to UVL, AFM, Glencoe, FeatureIDE, SPLOT, and JSON
 - **Real-time collaboration** (built into the Docker image; see [Collaboration backend](#collaboration-backend))
@@ -166,6 +167,23 @@ Operations are grouped by what they need. Results appear in the **Output** panel
 
 ---
 
+### Choosing a compute backend (in-browser or Remote API)
+
+The **Compute** section in the toolbar selects where analysis operations run:
+
+| Mode | Where it runs | Notes |
+|------|---------------|-------|
+| **In-browser** (default) | Pyodide / WebAssembly in your browser | Fully sandboxed — your model never leaves the machine |
+| **Remote API** | A [flamapy-rest](https://github.com/flamapy/flamapy_rest) server | Offloads heavy SAT/BDD/Z3 solving to a server; your model is uploaded on each operation |
+
+Choosing **Remote API** opens a dialog to set the server URL (default `https://rest.flamapy.org`, overridable via the `VITE_REST_API_URL` build variable); the choice and URL are remembered in your browser. The ⚙ button reopens the dialog.
+
+This is a **hybrid**: only the analysis operations are sent to the API. Editing, validation, the graph view, import/export, metrics charts, and the guided configurator always run in your browser, so WebAssembly still loads either way.
+
+> The server must allow the IDE's origin via CORS, and your model is transmitted to it — don't point it at an untrusted server.
+
+---
+
 ### Guided configurator
 
 The **Configuration** panel on the left side drives a step-by-step product configuration:
@@ -232,6 +250,7 @@ docker run --rm -p 8080:80 flamapy-ide
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `VITE_GA_MEASUREMENT_ID` | — | Google Analytics 4 measurement ID (optional, cookie-consent gated) |
+| `VITE_REST_API_URL` | `https://rest.flamapy.org` | Default flamapy-rest server used by the optional [Remote API compute backend](#choosing-a-compute-backend-in-browser-or-remote-api) (users can override it at runtime) |
 | `VITE_ENABLE_COLLAB` | `false` (`true` in the Docker image) | Set to `"true"` to enable collaborative editing |
 | `VITE_COLLAB_URL` | same origin (`ws(s)://<host>/collab`) | WebSocket URL for the collaboration server; override to point at an external server |
 

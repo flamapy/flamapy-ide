@@ -16,8 +16,19 @@ import FeatureFlowMap from "../../components/FeatureFlowMap";
 import ParetoFrontChart from "../../components/ParentoFrontChart";
 import ErrorBoundary from "../../components/ErrorBoundary";
 import OperationInputModal from "../../components/OperationInputModal";
+import BackendSettingsModal from "../../components/BackendSettingsModal";
 import JSZip from "jszip";
 import { useWorkerClient } from "../../hooks/useWorkerClient";
+import {
+  WASM,
+  REST,
+  loadBackend,
+  saveBackend,
+  loadRestUrl,
+  saveRestUrl,
+  executeRestOperation,
+  executeRestOperationWithConfig,
+} from "../../utils/computeBackend";
 
 // Canonical operation table — the single source of truth for every analysis the IDE
 // exposes. Each row is one FLAMAFeatureModel facade method (`method`); the per-solver
@@ -168,7 +179,17 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
   const [ffmData, setFfmData] = useState(null);
 
   const [selectedSolver, setSelectedSolver] = useState("sat");
+  // Compute backend: in-browser WASM (default) or a remote flamapy-rest API.
+  const [computeBackend, setComputeBackend] = useState(loadBackend);
+  const [restApiUrl, setRestApiUrl] = useState(loadRestUrl);
+  const [isBackendModalOpen, setIsBackendModalOpen] = useState(false);
   const editorRef = useRef(null);
+
+  const selectBackend = useCallback((backend) => {
+    setComputeBackend(backend);
+    saveBackend(backend);
+    if (backend === REST) setIsBackendModalOpen(true);
+  }, []);
 
   // Sync enabled plugins from worker config
   useEffect(() => {
@@ -393,14 +414,30 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
     try {
       // Forward the selected solver only to backend-aware operations, merged with any
       // argument already collected for the operation.
-      const data = action.backendAware
-        ? { ...action, args: { ...(action.args || {}), backend: selectedSolver } }
-        : action;
-      const result = await call("executeFacadeOperation", data);
-      result.result = JSON.parse(result.result);
-      setOutput(result);
-    } catch {
-      setOutput({ label: action.label, result: "An exception occurred. Check the model definition." });
+      const args = action.backendAware
+        ? { ...(action.args || {}), backend: selectedSolver }
+        : action.args || {};
+      let result;
+      if (computeBackend === REST) {
+        result = await executeRestOperation({
+          baseUrl: restApiUrl,
+          method: action.method,
+          modelText: editorRef.current.getValue(),
+          args,
+        });
+      } else {
+        const data = action.backendAware ? { ...action, args } : action;
+        result = JSON.parse((await call("executeFacadeOperation", data)).result);
+      }
+      setOutput({ label: action.label, result });
+    } catch (error) {
+      setOutput({
+        label: action.label,
+        result:
+          computeBackend === REST
+            ? `Remote API error: ${error.message}`
+            : "An exception occurred. Check the model definition.",
+      });
     }
     setIsRunning(false);
   }
@@ -423,12 +460,30 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
       setIsRunning(true);
       setOutput({ label: action.label, result: "Executing operation" });
       try {
-        const configs = { configuration_path: configuration };
-        const result = await call("executeFacadeOperationWithConfig", { action, configs });
-        result.result = JSON.parse(result.result);
-        setOutput(result);
-      } catch {
-        setOutput({ label: action.label, result: "An exception occurred. Check the model definition." });
+        let result;
+        if (computeBackend === REST) {
+          result = await executeRestOperationWithConfig({
+            baseUrl: restApiUrl,
+            method: action.method,
+            modelText: editorRef.current.getValue(),
+            configMapping: configuration,
+            args: action.args || {},
+          });
+        } else {
+          const configs = { configuration_path: configuration };
+          result = JSON.parse(
+            (await call("executeFacadeOperationWithConfig", { action, configs })).result
+          );
+        }
+        setOutput({ label: action.label, result });
+      } catch (error) {
+        setOutput({
+          label: action.label,
+          result:
+            computeBackend === REST
+              ? `Remote API error: ${error.message}`
+              : "An exception occurred. Check the model definition.",
+        });
       }
       setIsRunning(false);
     } else if (action.value === "configurator") {
@@ -749,6 +804,40 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
           </div>
 
           <div className="flex flex-col gap-1 whitespace-nowrap">
+            <span className="text-[11px] text-gray-600 dark:text-gray-300 text-center w-full">Compute</span>
+            <div className="h-px bg-gray-300 dark:bg-gray-600 w-full" />
+            <div className="flex items-stretch rounded overflow-hidden border border-gray-300 dark:border-gray-600">
+              <button
+                className={`px-2.5 py-2 text-sm ${
+                  computeBackend === WASM ? "bg-[#356C99] text-white" : "bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200"
+                }`}
+                onClick={() => selectBackend(WASM)}
+                title="Run analysis operations in your browser (WebAssembly)"
+              >
+                In-browser
+              </button>
+              <button
+                className={`px-2.5 py-2 text-sm border-l border-gray-300 dark:border-gray-600 ${
+                  computeBackend === REST ? "bg-[#356C99] text-white" : "bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200"
+                }`}
+                onClick={() => selectBackend(REST)}
+                title="Run analysis operations on a remote flamapy-rest API"
+              >
+                Remote API
+              </button>
+              {computeBackend === REST && (
+                <button
+                  className="px-2.5 py-2 text-sm border-l border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200"
+                  onClick={() => setIsBackendModalOpen(true)}
+                  title={`Configure the API URL (current: ${restApiUrl})`}
+                >
+                  ⚙
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-1 whitespace-nowrap">
             <span className="text-[11px] text-gray-600 dark:text-gray-300 text-center w-full">Export</span>
             <div className="h-px bg-gray-300 dark:bg-gray-600 w-full" />
             <div className="flex rounded overflow-hidden border border-gray-300">
@@ -831,7 +920,7 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
       </div>
     );
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [collabEnabled, collabFeatureAvailable, collabStatus, copyMessage, currentView, metricsOptions, selectedSolver, shareMessage, uvlhubMessage, solverOptions, viewOptions]);
+  }, [collabEnabled, collabFeatureAvailable, collabStatus, computeBackend, copyMessage, currentView, metricsOptions, restApiUrl, selectBackend, selectedSolver, shareMessage, uvlhubMessage, solverOptions, viewOptions]);
 
   useEffect(() => {
     if (setNavControls) {
@@ -1080,6 +1169,17 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
           options={inputModal.options}
           onConfirm={confirmInputOperation}
           onCancel={() => setInputModal(null)}
+        />
+      )}
+      {isBackendModalOpen && (
+        <BackendSettingsModal
+          url={restApiUrl}
+          onSave={(url) => {
+            setRestApiUrl(url);
+            saveRestUrl(url);
+            setIsBackendModalOpen(false);
+          }}
+          onCancel={() => setIsBackendModalOpen(false)}
         />
       )}
     </div>
