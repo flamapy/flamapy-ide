@@ -126,6 +126,9 @@ const TreeView = ({ treeData, executeAction, operations, history }) => {
       }
     >
       <div className="space-y-4 h-full">
+        <h2 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest">
+          Configuration Panel
+        </h2>
         <DropdownMenu
           buttonLabel={"Configuration Operations"}
           options={operations}

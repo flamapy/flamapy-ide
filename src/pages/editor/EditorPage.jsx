@@ -747,8 +747,10 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
               {viewOptions.map((option) => (
                 <button
                   key={option.value}
-                  className={`px-2.5 py-2 text-sm ${
-                    currentView === option.value ? "bg-[#356C99] text-white" : "bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200"
+                  className={`px-2.5 py-2 text-sm transition-colors duration-150 ${
+                    currentView === option.value
+                      ? "bg-[#356C99] text-white"
+                      : "bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600"
                   }`}
                   onClick={() => toggleView(option)}
                 >
@@ -760,7 +762,7 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
                   buttonLabel="Metrics"
                   options={metricsOptions}
                   executeAction={toggleView}
-                  className="bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 py-2 px-3 rounded-none shadow-none w-[100px] justify-between border-l border-gray-300 dark:border-gray-600"
+                  className="bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 py-2 px-3 rounded-none shadow-none w-[100px] justify-between border-l border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors duration-150"
                 />
               )}
             </div>
@@ -774,7 +776,7 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
                 buttonLabel="Structural operation"
                 options={STRUCTURAL_OPERATIONS}
                 executeAction={executeAction}
-                className="bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 py-2 px-3 rounded-none shadow-none w-[170px] justify-between"
+                className="bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 py-2 px-3 rounded-none shadow-none w-[170px] justify-between hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors duration-150"
               />
             </div>
           </div>
@@ -786,8 +788,10 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
               {solverOptions.map((option) => (
                 <button
                   key={option.value}
-                  className={`px-2.5 py-2 text-sm min-w-[60px] ${
-                    selectedSolver === option.value ? "bg-[#356C99] text-white" : "bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200"
+                  className={`px-2.5 py-2 text-sm min-w-[60px] transition-colors duration-150 ${
+                    selectedSolver === option.value
+                      ? "bg-[#356C99] text-white"
+                      : "bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600"
                   }`}
                   onClick={() => setSelectedSolver(option.value)}
                 >
@@ -798,7 +802,7 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
                 buttonLabel="Analysis operation"
                 options={operationsForSolver(selectedSolver)}
                 executeAction={executeAction}
-                className="bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 py-2 px-3 rounded-none shadow-none w-[170px] justify-between border-l"
+                className="bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 py-2 px-3 rounded-none shadow-none w-[170px] justify-between border-l border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors duration-150"
               />
             </div>
           </div>
@@ -808,8 +812,10 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
             <div className="h-px bg-gray-300 dark:bg-gray-600 w-full" />
             <div className="flex items-stretch rounded overflow-hidden border border-gray-300 dark:border-gray-600">
               <button
-                className={`px-2.5 py-2 text-sm ${
-                  computeBackend === WASM ? "bg-[#356C99] text-white" : "bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200"
+                className={`px-2.5 py-2 text-sm transition-colors duration-150 ${
+                  computeBackend === WASM
+                    ? "bg-[#356C99] text-white"
+                    : "bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600"
                 }`}
                 onClick={() => selectBackend(WASM)}
                 title="Run analysis operations in your browser (WebAssembly)"
@@ -817,8 +823,10 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
                 In-browser
               </button>
               <button
-                className={`px-2.5 py-2 text-sm border-l border-gray-300 dark:border-gray-600 ${
-                  computeBackend === REST ? "bg-[#356C99] text-white" : "bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200"
+                className={`px-2.5 py-2 text-sm border-l border-gray-300 dark:border-gray-600 transition-colors duration-150 ${
+                  computeBackend === REST
+                    ? "bg-[#356C99] text-white"
+                    : "bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600"
                 }`}
                 onClick={() => selectBackend(REST)}
                 title="Run analysis operations on a remote flamapy-rest API"
@@ -827,11 +835,14 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
               </button>
               {computeBackend === REST && (
                 <button
-                  className="px-2.5 py-2 text-sm border-l border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200"
+                  className="px-2.5 py-2 text-sm border-l border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors duration-150"
                   onClick={() => setIsBackendModalOpen(true)}
                   title={`Configure the API URL (current: ${restApiUrl})`}
                 >
-                  ⚙
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
                 </button>
               )}
             </div>
@@ -840,12 +851,12 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
           <div className="flex flex-col gap-1 whitespace-nowrap">
             <span className="text-[11px] text-gray-600 dark:text-gray-300 text-center w-full">Export</span>
             <div className="h-px bg-gray-300 dark:bg-gray-600 w-full" />
-            <div className="flex rounded overflow-hidden border border-gray-300">
+            <div className="flex rounded overflow-hidden border border-gray-300 dark:border-gray-600">
               <DropdownMenu
                 buttonLabel="Export"
                 options={EXPORT_OPERATIONS}
                 executeAction={downloadFile}
-                className="bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 py-2 px-3 rounded-none shadow-none w-[120px] justify-between"
+                className="bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 py-2 px-3 rounded-none shadow-none w-[120px] justify-between hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors duration-150"
               />
             </div>
           </div>
@@ -938,20 +949,28 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
             <TreeView treeData={featureTree} executeAction={executeActionWithConf} operations={CONFIG_OPERATIONS} history={history} />
             {currentView !== "configurator" && (
               <button
-                className="absolute right-[-12px] top-1/2 -translate-y-1/2 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 text-[10px] px-1 py-10 rounded-r shadow hover:bg-gray-400 dark:hover:bg-gray-500 rotate-180 [writing-mode:vertical-rl]"
+                aria-label="Hide configuration panel"
+                title="Hide configuration panel"
+                className="absolute right-[-14px] top-1/2 -translate-y-1/2 z-20 flex items-center justify-center w-7 h-10 bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300 rounded-r shadow hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors duration-150"
                 onClick={() => setShowConfiguratorPanel(false)}
               >
-                Hide configuration panel
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
               </button>
             )}
           </div>
         )}
         {!showConfiguratorPanel && currentView !== "configurator" && (
           <button
-            className="absolute left-0 top-1/2 -translate-y-1/2 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 text-[10px] px-1 py-10 rounded-r shadow hover:bg-gray-400 dark:hover:bg-gray-500 z-40 rotate-180 [writing-mode:vertical-rl]"
+            aria-label="Show configuration panel"
+            title="Show configuration panel"
+            className="absolute left-0 top-1/2 -translate-y-1/2 z-40 flex items-center justify-center w-7 h-10 bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300 rounded-r shadow hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors duration-150"
             onClick={() => setShowConfiguratorPanel(true)}
           >
-            Show configuration panel
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
           </button>
         )}
 

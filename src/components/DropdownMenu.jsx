@@ -87,7 +87,15 @@ const DropdownMenu = ({
         aria-expanded={isOpen}
       >
         {buttonLabel}
-        <span className="ml-2">&#9660;</span>
+        <svg
+          className={`ml-2 w-3 h-3 shrink-0 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+        </svg>
       </button>
 
       {isOpen && (

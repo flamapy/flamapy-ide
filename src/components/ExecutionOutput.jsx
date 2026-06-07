@@ -28,26 +28,28 @@ const ExecutionOutput = ({
       resizeHandles={["n"]}
       onResize={handleResize}
     >
-      <div className="overflow-auto h-full">
-        <button
-          onClick={handleStop}
-          className="absolute top-0 right-0 m-2 p-2 bg-red-600 text-white rounded"
-        >
-          Stop
-        </button>
-        <div className="flex items-center font-semibold text-xl">
-          {isAwaiting ? (
-            <>
-              <Spinner /> {children.label}
-            </>
-          ) : (
-            children.label
+      <div className="flex flex-col h-full overflow-hidden">
+        <div className="flex items-center justify-between shrink-0 pb-2 border-b border-gray-500 dark:border-gray-600">
+          <div className="flex items-center gap-2 font-semibold text-base leading-tight">
+            {isAwaiting && <Spinner />}
+            <span>{children.label}</span>
+          </div>
+          {isAwaiting && (
+            <button
+              onClick={handleStop}
+              className="flex items-center gap-1 px-3 py-1 text-sm bg-red-600 hover:bg-red-700 active:bg-red-800 text-white rounded transition-colors duration-150"
+            >
+              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <rect x="4" y="4" width="16" height="16" rx="2" />
+              </svg>
+              Stop
+            </button>
           )}
         </div>
-        <div className="font-mono text-sm">
+        <div className="font-mono text-sm mt-2 overflow-auto flex-1">
           {children.result == null ||
           (Array.isArray(children.result) && children.result.length === 0) ? (
-            <div>There are no {children.label}.</div>
+            <div className="text-gray-400 italic">There are no {children.label}.</div>
           ) : Array.isArray(children.result) ? (
             children.result.map((item, index) => (
               <div key={index}>{item.toString()}</div>

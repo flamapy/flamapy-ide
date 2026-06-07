@@ -24,8 +24,11 @@ const ModelInformation = ({
       resizeHandles={["w"]}
     >
       <div>
+        <h2 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-3">
+          Model Information
+        </h2>
         <button
-          className="w-full bg-[#356C99] text-white py-2 px-4 rounded active:bg-[#0D486C] shadow-lg"
+          className="w-full bg-[#356C99] hover:bg-[#0D486C] active:bg-[#0a3a57] text-white py-2 px-4 rounded shadow-lg transition-colors duration-150"
           onClick={onValidateModel}
         >
           {buttonText}
