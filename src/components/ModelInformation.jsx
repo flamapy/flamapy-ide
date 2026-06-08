@@ -1,12 +1,16 @@
 /* eslint-disable react/prop-types */
 import { ResizableBox } from "react-resizable";
 import ModelProperties from "./ModelProperties";
+import Card from "./ui/Card";
+import { vsBtnPrimary, ACCENT } from "./ui/styles";
 
+// Right-hand "Model information" panel. Validation errors/warnings now live in the
+// bottom PROBLEMS tab; this panel keeps the validate action and the model metrics.
 const ModelInformation = ({
   width = 300,
-  minWidth = 150,
-  maxWidth = 400,
-  buttonText = "Syntax Validation",
+  minWidth = 180,
+  maxWidth = 460,
+  buttonText = "Validate syntax",
   onValidateModel,
   validation,
 }) => {
@@ -17,42 +21,24 @@ const ModelInformation = ({
       axis="x"
       minConstraints={[minWidth, Infinity]}
       maxConstraints={[maxWidth, Infinity]}
-      className="bg-neutral-300 dark:bg-gray-700 text-neutral-900 dark:text-gray-100 p-4 resize-handle-left rounded-lg overflow-auto"
-      handle={
-        <div className="absolute left-0 top-0 h-full w-2 cursor-ew-resize" />
-      }
+      className="bg-panel dark:bg-gray-900 border-l border-black/10 dark:border-white/10 p-3 overflow-auto relative"
+      handle={<div className="absolute left-0 top-0 h-full w-1.5 cursor-ew-resize" />}
       resizeHandles={["w"]}
     >
-      <div>
-        <h2 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-3">
-          Model Information
-        </h2>
-        <button
-          className="w-full bg-[#356C99] hover:bg-[#0D486C] active:bg-[#0a3a57] text-white py-2 px-4 rounded shadow-lg transition-colors duration-150"
-          onClick={onValidateModel}
-        >
+      <Card title="Model information" accent={ACCENT}>
+        <button className={`${vsBtnPrimary} w-full justify-center`} onClick={onValidateModel}>
           {buttonText}
         </button>
-        {validation?.errors?.length > 0 &&
-          validation.errors.map((error, index) => {
-            return (
-              <div
-                className="w-full bg-red-700 text-white py-2 px-4 rounded mt-1"
-                key={index}
-              >
-                {error}
-              </div>
-            );
-          })}
-        {validation?.warnings?.length > 0 && (
-          <div className="w-full bg-yellow-700 text-white py-2 px-4 rounded mt-1">
-            The model presents warnings: {validation.warnings}
-          </div>
-        )}
-        {validation?.valid && (
+        {validation?.valid ? (
           <ModelProperties modelProperties={validation.modelInformation} />
+        ) : (
+          <p className="text-[12px] text-gray-500 dark:text-gray-400">
+            {validation
+              ? "The model has problems — see the Problems tab."
+              : "Validate the model to see its metrics."}
+          </p>
         )}
-      </div>
+      </Card>
     </ResizableBox>
   );
 };

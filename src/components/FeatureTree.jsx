@@ -120,19 +120,20 @@ const TreeView = ({ treeData, executeAction, operations, history }) => {
       axis="x"
       minConstraints={[200, panelHeight]}
       maxConstraints={[500, panelHeight]}
-      className="bg-neutral-300 dark:bg-gray-700 text-neutral-900 dark:text-gray-100 p-4 resize-handle-right rounded-lg overflow-auto relative shadow-md h-full"
+      className="bg-panel dark:bg-gray-900 text-neutral-900 dark:text-gray-100 p-3 overflow-auto relative border-r border-black/10 dark:border-white/10 h-full"
       handle={
-        <div className="absolute right-0 top-0 h-full w-2 cursor-ew-resize z-20" />
+        <div className="absolute right-0 top-0 h-full w-1.5 cursor-ew-resize z-20" />
       }
     >
-      <div className="space-y-4 h-full">
-        <h2 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest">
-          Configuration Panel
+      <div className="space-y-3 h-full">
+        <h2 className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider px-1">
+          Configurator
         </h2>
         <DropdownMenu
-          buttonLabel={"Configuration Operations"}
+          buttonLabel={"Configuration operations"}
           options={operations}
           executeAction={(action) => executeAction(action, statusMap)}
+          className="w-full inline-flex items-center justify-between gap-1 bg-accent text-white py-1.5 px-3 rounded-md text-[12px] hover:bg-[#1d5cf0] transition-colors"
         />
 
         {treeData && (

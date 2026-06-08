@@ -3,9 +3,13 @@ import { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import "react-resizable/css/styles.css";
 import ModelInformation from "../../components/ModelInformation";
-import ExecutionOutput from "../../components/ExecutionOutput";
 import UVLEditor from "../../components/UVLEditor";
-import DropdownMenu from "../../components/DropdownMenu";
+import TitleBar from "../../components/layout/TitleBar";
+import ActionToolbar from "../../components/layout/ActionToolbar";
+import ActivityBar from "../../components/layout/ActivityBar";
+import EditorTabs from "../../components/layout/EditorTabs";
+import BottomPanel from "../../components/layout/BottomPanel";
+import StatusBar from "../../components/layout/StatusBar";
 import { saveAs } from "file-saver";
 import TreeView from "../../components/FeatureTree";
 import FeatureModelVisualization from "../../components/FeatureModelVisualization";
@@ -123,7 +127,7 @@ function defaultCollabEndpoint() {
   return `${proto}//${window.location.host}/collab`;
 }
 
-function EditorPage({ selectedFile, setNavControls, darkMode }) {
+function EditorPage({ selectedFile, darkMode, toggleDark }) {
   const location = useLocation();
   const navigate = useNavigate();
   const searchParams = new URLSearchParams(location.search);
@@ -156,6 +160,8 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
   const [constraints, setConstraints] = useState(null);
   const [history, setHistory] = useState(null);
   const [showConfiguratorPanel, setShowConfiguratorPanel] = useState(true);
+  const [modelInfoOpen, setModelInfoOpen] = useState(true);
+  const [panelTab, setPanelTab] = useState("output");
 
   // Plugin config synced from worker on load
   const [enabledPlugins, setEnabledPlugins] = useState({ sat: true, bdd: true, z3: false });
@@ -734,302 +740,145 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
     closeAttrSelectionModal();
   }
 
-  // Navbar toolbar (injected via setNavControls)
-  const toolbarContent = useMemo(() => {
-    return (
-      <div className="w-full flex justify-center">
-        <div className="flex items-end gap-3 flex-nowrap overflow-x-auto overflow-visible px-3 py-1 bg-white/80 dark:bg-gray-800/90 rounded shadow-sm">
-
-          <div className="flex flex-col gap-1 whitespace-nowrap">
-            <span className="text-[11px] text-gray-600 dark:text-gray-300 text-center w-full">View</span>
-            <div className="h-px bg-gray-300 dark:bg-gray-600 w-full" />
-            <div className="flex items-stretch rounded overflow-hidden border border-gray-300 dark:border-gray-600">
-              {viewOptions.map((option) => (
-                <button
-                  key={option.value}
-                  className={`px-2.5 py-2 text-sm transition-colors duration-150 ${
-                    currentView === option.value
-                      ? "bg-[#356C99] text-white"
-                      : "bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600"
-                  }`}
-                  onClick={() => toggleView(option)}
-                >
-                  {option.label}
-                </button>
-              ))}
-              {metricsOptions.length > 0 && (
-                <DropdownMenu
-                  buttonLabel="Metrics"
-                  options={metricsOptions}
-                  executeAction={toggleView}
-                  className="bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 py-2 px-3 rounded-none shadow-none w-[100px] justify-between border-l border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors duration-150"
-                />
-              )}
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-1 whitespace-nowrap">
-            <span className="text-[11px] text-gray-600 dark:text-gray-300 text-center w-full">Structural</span>
-            <div className="h-px bg-gray-300 dark:bg-gray-600 w-full" />
-            <div className="flex rounded overflow-hidden border border-gray-300 dark:border-gray-600">
-              <DropdownMenu
-                buttonLabel="Structural operation"
-                options={STRUCTURAL_OPERATIONS}
-                executeAction={executeAction}
-                className="bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 py-2 px-3 rounded-none shadow-none w-[170px] justify-between hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors duration-150"
-              />
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-1 whitespace-nowrap">
-            <span className="text-[11px] text-gray-600 dark:text-gray-300 text-center w-full">Automated analysis</span>
-            <div className="h-px bg-gray-300 dark:bg-gray-600 w-full" />
-            <div className="flex items-stretch rounded overflow-hidden border border-gray-300 dark:border-gray-600">
-              {solverOptions.map((option) => (
-                <button
-                  key={option.value}
-                  className={`px-2.5 py-2 text-sm min-w-[60px] transition-colors duration-150 ${
-                    selectedSolver === option.value
-                      ? "bg-[#356C99] text-white"
-                      : "bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600"
-                  }`}
-                  onClick={() => setSelectedSolver(option.value)}
-                >
-                  {option.label}
-                </button>
-              ))}
-              <DropdownMenu
-                buttonLabel="Analysis operation"
-                options={operationsForSolver(selectedSolver)}
-                executeAction={executeAction}
-                className="bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 py-2 px-3 rounded-none shadow-none w-[170px] justify-between border-l border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors duration-150"
-              />
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-1 whitespace-nowrap">
-            <span className="text-[11px] text-gray-600 dark:text-gray-300 text-center w-full">Compute</span>
-            <div className="h-px bg-gray-300 dark:bg-gray-600 w-full" />
-            <div className="flex items-stretch rounded overflow-hidden border border-gray-300 dark:border-gray-600">
-              <button
-                className={`px-2.5 py-2 text-sm transition-colors duration-150 ${
-                  computeBackend === WASM
-                    ? "bg-[#356C99] text-white"
-                    : "bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600"
-                }`}
-                onClick={() => selectBackend(WASM)}
-                title="Run analysis operations in your browser (WebAssembly)"
-              >
-                In-browser
-              </button>
-              <button
-                className={`px-2.5 py-2 text-sm border-l border-gray-300 dark:border-gray-600 transition-colors duration-150 ${
-                  computeBackend === REST
-                    ? "bg-[#356C99] text-white"
-                    : "bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600"
-                }`}
-                onClick={() => selectBackend(REST)}
-                title="Run analysis operations on a remote flamapy-rest API"
-              >
-                Remote API
-              </button>
-              {computeBackend === REST && (
-                <button
-                  className="px-2.5 py-2 text-sm border-l border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors duration-150"
-                  onClick={() => setIsBackendModalOpen(true)}
-                  title={`Configure the API URL (current: ${restApiUrl})`}
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
-                </button>
-              )}
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-1 whitespace-nowrap">
-            <span className="text-[11px] text-gray-600 dark:text-gray-300 text-center w-full">Export</span>
-            <div className="h-px bg-gray-300 dark:bg-gray-600 w-full" />
-            <div className="flex rounded overflow-hidden border border-gray-300 dark:border-gray-600">
-              <DropdownMenu
-                buttonLabel="Export"
-                options={EXPORT_OPERATIONS}
-                executeAction={downloadFile}
-                className="bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 py-2 px-3 rounded-none shadow-none w-[120px] justify-between hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors duration-150"
-              />
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-1 whitespace-nowrap">
-            <span className="text-[11px] text-gray-600 dark:text-gray-300 text-center w-full">Share</span>
-            <div className="h-px bg-gray-300 dark:bg-gray-600 w-full" />
-            <div className="flex items-end gap-1">
-              <div className="flex rounded overflow-hidden border border-gray-300 dark:border-gray-600">
-                <button
-                  className="py-2 px-3 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600"
-                  onClick={handleCopyModelLink}
-                >
-                  Copy model link
-                </button>
-              </div>
-              {shareMessage && <span className="text-xs text-gray-600 dark:text-gray-300">{shareMessage}</span>}
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-1 whitespace-nowrap">
-            <span className="text-[11px] text-gray-600 dark:text-gray-300 text-center w-full">UVLHub</span>
-            <div className="h-px bg-gray-300 dark:bg-gray-600 w-full" />
-            <div className="flex items-end gap-1">
-              <div className="flex rounded overflow-hidden border border-gray-300 dark:border-gray-600">
-                <button
-                  className="py-2 px-3 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600"
-                  onClick={handleSaveToUVLHub}
-                >
-                  Save to UVLHub
-                </button>
-              </div>
-              {uvlhubMessage && <span className="text-xs text-gray-600 dark:text-gray-300">{uvlhubMessage}</span>}
-            </div>
-          </div>
-
-          {collabEnabled && (
-            <div className="flex flex-col gap-1 whitespace-nowrap">
-              <span className="text-[11px] text-gray-600 dark:text-gray-300 text-center w-full">Collaborate</span>
-              <div className="h-px bg-gray-300 dark:bg-gray-600 w-full" />
-              <div className="flex items-end gap-1">
-                <div className="flex rounded overflow-hidden border border-gray-300 dark:border-gray-600">
-                  <button
-                    className="py-2 px-3 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600"
-                    onClick={handleCopySessionLink}
-                  >
-                    Copy link
-                  </button>
-                </div>
-                {copyMessage && <span className="text-xs text-gray-600 dark:text-gray-300">{copyMessage}</span>}
-              </div>
-            </div>
-          )}
-          {!collabEnabled && collabFeatureAvailable && (
-            <div className="flex flex-col gap-1 whitespace-nowrap">
-              <span className="text-[11px] text-gray-600 dark:text-gray-300 text-center w-full">Collaborate</span>
-              <div className="h-px bg-gray-300 dark:bg-gray-600 w-full" />
-              <div className="flex items-end gap-1">
-                <div className="flex rounded overflow-hidden border border-gray-300 dark:border-gray-600">
-                  <button
-                    className="py-2 px-3 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600"
-                    onClick={handleStartCollab}
-                  >
-                    Collaborate
-                  </button>
-                </div>
-                {collabStatus && <span className="text-xs text-gray-600 dark:text-gray-300">{collabStatus}</span>}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [collabEnabled, collabFeatureAvailable, collabStatus, computeBackend, copyMessage, currentView, metricsOptions, restApiUrl, selectBackend, selectedSolver, shareMessage, uvlhubMessage, solverOptions, viewOptions]);
-
-  useEffect(() => {
-    if (setNavControls) {
-      setNavControls(toolbarContent);
-      return () => setNavControls(null);
+  // VSCode-style editor tabs: base views + metrics, plus a dynamic tab for the
+  // configurator / pareto-front views while they are the active view.
+  const editorTabs = useMemo(() => {
+    const tabs = [...viewOptions, ...metricsOptions];
+    const dynamic = { configurator: "Configurator", paretofront: "Pareto Front" };
+    if (dynamic[currentView] && !tabs.some((t) => t.value === currentView)) {
+      tabs.push({ label: dynamic[currentView], value: currentView });
     }
-  }, [setNavControls, toolbarContent]);
+    return tabs;
+  }, [viewOptions, metricsOptions, currentView]);
+
+  // Status-bar backend control toggles between in-browser WASM and the remote API
+  // (selectBackend opens the settings modal when switching to REST).
+  const toggleComputeBackend = useCallback(
+    () => selectBackend(computeBackend === WASM ? REST : WASM),
+    [computeBackend, selectBackend]
+  );
 
   return (
-    <div className="flex-1 overflow-hidden flex flex-col">
-      <div className="flex flex-row flex-grow p-2 gap-2 overflow-hidden relative items-stretch">
+    <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-surface dark:bg-gray-950 text-gray-900 dark:text-gray-100">
+      <TitleBar darkMode={darkMode} toggleDark={toggleDark} />
+
+      <ActionToolbar
+        structuralOptions={STRUCTURAL_OPERATIONS}
+        executeAction={executeAction}
+        solverOptions={solverOptions}
+        selectedSolver={selectedSolver}
+        setSelectedSolver={setSelectedSolver}
+        analysisOptions={operationsForSolver(selectedSolver)}
+        exportOptions={EXPORT_OPERATIONS}
+        downloadFile={downloadFile}
+        onShareLink={handleCopyModelLink}
+        shareMessage={shareMessage}
+        onUvlhub={handleSaveToUVLHub}
+        uvlhubMessage={uvlhubMessage}
+        collab={{
+          enabled: collabEnabled,
+          available: collabFeatureAvailable,
+          onCopySession: handleCopySessionLink,
+          copyMessage,
+          onStart: handleStartCollab,
+          status: collabStatus,
+        }}
+      />
+
+      <div className="flex flex-1 overflow-hidden">
+        <ActivityBar
+          sidebarOpen={showConfiguratorPanel}
+          onToggleSidebar={() => setShowConfiguratorPanel((o) => !o)}
+          modelInfoOpen={modelInfoOpen}
+          onToggleModelInfo={() => setModelInfoOpen((o) => !o)}
+          onOpenBackend={() => setIsBackendModalOpen(true)}
+        />
 
         {showConfiguratorPanel && (
-          <div className="relative h-full">
-            <TreeView treeData={featureTree} executeAction={executeActionWithConf} operations={CONFIG_OPERATIONS} history={history} />
-            {currentView !== "configurator" && (
-              <button
-                aria-label="Hide configuration panel"
-                title="Hide configuration panel"
-                className="absolute right-[-14px] top-1/2 -translate-y-1/2 z-20 flex items-center justify-center w-7 h-10 bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300 rounded-r shadow hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors duration-150"
-                onClick={() => setShowConfiguratorPanel(false)}
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-              </button>
+          <TreeView
+            treeData={featureTree}
+            executeAction={executeActionWithConf}
+            operations={CONFIG_OPERATIONS}
+            history={history}
+          />
+        )}
+
+        <div className="flex flex-1 flex-col overflow-hidden">
+          <EditorTabs tabs={editorTabs} currentView={currentView} onSelect={toggleView} />
+
+          <div className="flex flex-1 flex-col overflow-hidden relative">
+            <UVLEditor
+              editorRef={editorRef}
+              validateModel={validateModel}
+              defaultCode={initialContent}
+              hide={currentView !== "source"}
+              collabConfig={collabConfig}
+              onEditorMount={() => setIsEditorReady(true)}
+              darkMode={darkMode}
+            />
+            {currentView === "graph" && (
+              <FeatureModelVisualization treeData={featureTree} constraints={constraints} />
+            )}
+            {currentView === "configdist" && (
+              <div className="flex-1 overflow-auto">
+                <ErrorBoundary>
+                  <ProductDistributionChart data={configDistData} />
+                </ErrorBoundary>
+              </div>
+            )}
+            {currentView === "fip" && (
+              <div className="flex-1 overflow-auto">
+                <ErrorBoundary>
+                  <FeatureInclusionProbabilitiesChart data={fipData} />
+                </ErrorBoundary>
+              </div>
+            )}
+            {currentView === "ffm" && (
+              <div className="flex-1 overflow-auto">
+                <ErrorBoundary>
+                  <FeatureFlowMap data={ffmData} />
+                </ErrorBoundary>
+              </div>
+            )}
+            {currentView === "paretofront" && (
+              <div className="flex-1 overflow-auto">
+                <ErrorBoundary>
+                  <ParetoFrontChart data={paretoFrontData} />
+                </ErrorBoundary>
+              </div>
+            )}
+            {currentView === "configurator" && (
+              <Wizzard call={call} setHistory={setHistory} />
             )}
           </div>
-        )}
-        {!showConfiguratorPanel && currentView !== "configurator" && (
-          <button
-            aria-label="Show configuration panel"
-            title="Show configuration panel"
-            className="absolute left-0 top-1/2 -translate-y-1/2 z-40 flex items-center justify-center w-7 h-10 bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300 rounded-r shadow hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors duration-150"
-            onClick={() => setShowConfiguratorPanel(true)}
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
-        )}
 
-        <div className="flex flex-1 flex-col">
-          <UVLEditor
-            editorRef={editorRef}
-            validateModel={validateModel}
-            defaultCode={initialContent}
-            hide={currentView !== "source"}
-            collabConfig={collabConfig}
-            onEditorMount={() => setIsEditorReady(true)}
-            darkMode={darkMode}
-          />
-          {currentView === "graph" && (
-            <FeatureModelVisualization treeData={featureTree} constraints={constraints} />
-          )}
-          {currentView === "configdist" && (
-            <div className="flex-1 overflow-auto">
-              <ErrorBoundary>
-                <ProductDistributionChart data={configDistData} />
-              </ErrorBoundary>
-            </div>
-          )}
-          {currentView === "fip" && (
-            <div className="flex-1 overflow-auto">
-              <ErrorBoundary>
-                <FeatureInclusionProbabilitiesChart data={fipData} />
-              </ErrorBoundary>
-            </div>
-          )}
-          {currentView === "ffm" && (
-            <div className="flex-1 overflow-auto">
-              <ErrorBoundary>
-                <FeatureFlowMap data={ffmData} />
-              </ErrorBoundary>
-            </div>
-          )}
-          {currentView === "paretofront" && (
-            <div className="flex-1 overflow-auto">
-              <ErrorBoundary>
-                <ParetoFrontChart data={paretoFrontData} />
-              </ErrorBoundary>
-            </div>
-          )}
-          {currentView === "configurator" && (
-            <Wizzard call={call} setHistory={setHistory} />
-          )}
-
-          <ExecutionOutput
+          <BottomPanel
+            panelTab={panelTab}
+            setPanelTab={setPanelTab}
+            output={output}
+            validation={validation}
+            isAwaiting={isRunning || !isImported || !isLoaded}
             handleResize={handleResize}
             handleStop={interruptExecution}
-            isAwaiting={isRunning || !isImported || !isLoaded}
-          >
-            {output}
-          </ExecutionOutput>
+          />
         </div>
 
-        <ModelInformation onValidateModel={validateModel} validation={validation} />
+        {modelInfoOpen && (
+          <ModelInformation onValidateModel={validateModel} validation={validation} />
+        )}
       </div>
+
+      <StatusBar
+        isLoaded={isLoaded}
+        isAwaiting={isRunning || !isImported || !isLoaded}
+        validation={validation}
+        onShowProblems={() => setPanelTab("problems")}
+        computeBackend={computeBackend}
+        WASM={WASM}
+        onToggleBackend={toggleComputeBackend}
+        restApiUrl={restApiUrl}
+        selectedSolver={selectedSolver}
+      />
 
       {isAttrOptModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-75">
