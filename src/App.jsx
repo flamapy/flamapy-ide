@@ -22,7 +22,7 @@ function NavbarLayout({ darkMode, toggleDark }) {
       <Navbar darkMode={darkMode} toggleDark={toggleDark}>
         <Link
           to="/how-to-cite-us"
-          className="text-m font-medium text-gray-600 dark:text-gray-300 hover:text-blue-600 transition-colors duration-200"
+          className="text-[12px] font-medium text-gray-600 dark:text-gray-300 hover:text-accent dark:hover:text-white transition-colors"
         >
           How to cite us
         </Link>
@@ -30,13 +30,13 @@ function NavbarLayout({ darkMode, toggleDark }) {
           href="https://github.com/flamapy/flamapy-ide"
           target="_blank"
           rel="noreferrer"
-          className="text-m font-medium text-gray-600 dark:text-gray-300 hover:text-blue-600 transition-colors duration-200"
+          className="text-[12px] font-medium text-gray-600 dark:text-gray-300 hover:text-accent dark:hover:text-white transition-colors"
         >
           GitHub
         </a>
         <Link
           to="/privacy"
-          className="text-m font-medium text-gray-600 dark:text-gray-300 hover:text-blue-600 transition-colors duration-200"
+          className="text-[12px] font-medium text-gray-600 dark:text-gray-300 hover:text-accent dark:hover:text-white transition-colors"
         >
           Privacy
         </Link>

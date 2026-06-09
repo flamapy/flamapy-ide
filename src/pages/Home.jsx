@@ -1,6 +1,7 @@
 /* eslint-disable react/prop-types */
 import { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { vsBtnPrimary, vsBtn, vsCard } from "../components/ui/styles";
 
 function Home({ setSelectedFile }) {
   const navigate = useNavigate();
@@ -82,77 +83,93 @@ function Home({ setSelectedFile }) {
   };
 
   return (
-    <div className="flex items-center justify-center h-screen">
-      <div className="flex flex-col items-center space-y-4">
+    <div className="min-h-full flex items-center justify-center bg-surface dark:bg-gray-900 px-4 py-10">
+      <div className={`${vsCard} w-full max-w-md p-8`}>
+        <div className="flex flex-col items-center text-center">
+          <img
+            src="assets/flamapy_horizontal_logo_white.svg"
+            alt="Flamapy logo"
+            width="200"
+            className="mb-2"
+          />
+          <h1 className="text-xl font-semibold text-gray-800 dark:text-gray-100">
+            Welcome to the Flamapy IDE
+          </h1>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            Create, import or explore a feature model to get started.
+          </p>
+        </div>
+
         {fetchError && (
-          <div className="max-w-xl bg-yellow-700 text-white text-center py-3 px-4 rounded-md mb-4">
+          <div className="mt-6 bg-yellow-700/90 text-white text-center text-sm py-2.5 px-4 rounded-md">
             {`An error has occurred when trying to import the requested model. If the problem persists, try to import the model from your system.`}
           </div>
         )}
-        <button
-          className="w-full bg-[#356C99] text-white py-2 px-4 rounded active:bg-[#0D486C] shadow-lg"
-          onClick={() => {
-            setSelectedFile(null);
-            navigate("/editor");
-          }}
-        >
-          Create new model
-        </button>
-        <input
-          type="file"
-          id="fileInput"
-          onChange={handleFileChange}
-          style={{ display: "none" }}
-        />
-        <button
-          className="w-full bg-[#356C99] text-white py-2 px-4 rounded shadow-lg"
-          onClick={() => document.getElementById("fileInput").click()}
-        >
-          Import model
-        </button>
 
-        {/* New Button to Show Model List */}
-        <button
-          className="w-full bg-[#356C99] text-white py-2 px-4 rounded shadow-lg"
-          onClick={() => setShowModelList(true)}
-        >
-          Start from a sample model
-        </button>
-
-        {/* Modal for Model Selection */}
-        {showModelList && (
-          <div className="modal fixed inset-0 flex items-center justify-center bg-black bg-opacity-50">
-            <div className="bg-white dark:bg-gray-600 p-4 rounded-md">
-              <h2 className="text-lg dark:text-gray-300 font-semibold mb-2">Select a Model to Import</h2>
-              <ul>
-                {predefinedModels.map((model, index) => (
-                  <li key={index} className="mb-2">
-                    <button
-                      className="text-blue-500 dark:text-blue-300 underline"
-                      onClick={() => handleModelImport(model.url)}
-                    >
-                      {model.name}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-              <button
-                className="mt-4 bg-red-500 text-white py-1 px-3 rounded"
-                onClick={() => setShowModelList(false)}
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        )}
-
-        <div className="text-center text-sm italic">
-          <p>
-            Supported feature models: UVL (.uvl), Glencoe (.gfm.json), AFM
-            (.afm), FeatureIDE (.fide), JSON (.json), FaMa (.xml)
-          </p>
+        <div className="mt-6 flex flex-col gap-2.5">
+          <button
+            className={`${vsBtnPrimary} justify-center w-full py-2 text-[13px]`}
+            onClick={() => {
+              setSelectedFile(null);
+              navigate("/editor");
+            }}
+          >
+            Create new model
+          </button>
+          <input
+            type="file"
+            id="fileInput"
+            onChange={handleFileChange}
+            style={{ display: "none" }}
+          />
+          <button
+            className={`${vsBtn} justify-center w-full py-2 text-[13px] border border-black/10 dark:border-white/10`}
+            onClick={() => document.getElementById("fileInput").click()}
+          >
+            Import model
+          </button>
+          <button
+            className={`${vsBtn} justify-center w-full py-2 text-[13px] border border-black/10 dark:border-white/10`}
+            onClick={() => setShowModelList(true)}
+          >
+            Start from a sample model
+          </button>
         </div>
+
+        <p className="mt-6 text-center text-[11px] text-gray-400 dark:text-gray-500">
+          Supported feature models: UVL (.uvl), Glencoe (.gfm.json), AFM (.afm),
+          FeatureIDE (.fide), JSON (.json), FaMa (.xml)
+        </p>
       </div>
+
+      {/* Modal for Model Selection */}
+      {showModelList && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+          <div className={`${vsCard} w-full max-w-sm p-6`}>
+            <h2 className="text-base font-semibold text-gray-800 dark:text-gray-100 mb-3">
+              Select a model to import
+            </h2>
+            <ul className="flex flex-col gap-1">
+              {predefinedModels.map((model, index) => (
+                <li key={index}>
+                  <button
+                    className={`${vsBtn} w-full justify-start py-2`}
+                    onClick={() => handleModelImport(model.url)}
+                  >
+                    {model.name}
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <button
+              className={`${vsBtn} justify-center w-full py-2 mt-4 border border-black/10 dark:border-white/10`}
+              onClick={() => setShowModelList(false)}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
