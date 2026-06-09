@@ -10,9 +10,11 @@ function Home({ setSelectedFile }) {
   const [showModelList, setShowModelList] = useState(false);
 
   const predefinedModels = [
-    { name: "Xiaomi SmartBand 8", url: "assets/models/xiaomi-band-8.uvl" },
-    { name: "SmartWatch", url: "assets/models/smart-watch.uvl" },
-    { name: "Data VIZ", url: "assets/models/visualization.uvl" },
+    { name: "Xiaomi SmartBand 8 (Boolean Level)", url: "assets/models/xiaomi-band-8.uvl" },
+    { name: "SmartWatch (Boolean Level)", url: "assets/models/smart-watch.uvl" },
+    { name: "Data VIZ (Boolean Level)", url: "assets/models/visualization.uvl" },
+    { name: "Pizza (Type Level)", url: "assets/models/pizza.uvl" },
+
 
     // Add more models as needed
   ];
