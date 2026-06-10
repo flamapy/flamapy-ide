@@ -5,16 +5,18 @@ from public.flamapy.flamapy_ide import (
     execute_facade_operation_with_config, feature_tree,
     execute_export_transformation,
     execute_import_transformation, get_model_information,
+    get_model_information_json,
     get_configuration_distribution, get_feature_inclusion_probabilities,
 )
 
-# Test to process a UVL file (valid)
+# Test to process a UVL file (valid). Validation is intentionally cheap: model
+# metrics are no longer embedded in its payload (see get_model_information_json).
 def test_process_uvl_file_valid():
     file_path = './tests/test_models/uvlfile.uvl'
     result = process_uvl_file(file_path)
     result_data = json.loads(result)
     assert result_data['valid'] == True
-    assert 'modelInformation' in result_data
+    assert 'modelInformation' not in result_data
 
 # Test to process a UVL file (invalid)
 def test_process_uvl_file_invalid():
@@ -39,6 +41,13 @@ def test_get_model_information():
     assert result['Atomic Sets'] == [['A'], ['B'], ['C']]
     assert result['Core Features'] == ['A']
     assert result['Leaf Features'] == ['B', 'C']
+
+# The worker requests metrics through the JSON wrapper; it must round-trip.
+def test_get_model_information_json():
+    process_uvl_file('./tests/test_models/uvlfile.uvl')
+    result = json.loads(get_model_information_json())
+    assert result['Leaf Number'] == 2
+    assert result['Core Features'] == ['A']
 
 # Test the generic facade dispatcher (replaces the former execute_pysat_operation path:
 # analysis operations are now addressed by facade method name + optional backend).

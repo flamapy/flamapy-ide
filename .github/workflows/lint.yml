@@ -1,4 +1,4 @@
-name: Lint
+name: Lint & Frontend tests
 
 on:
   pull_request:
@@ -19,7 +19,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Install dependencies
@@ -27,3 +27,11 @@ jobs:
 
       - name: Run ESLint
         run: npm run lint
+
+      - name: Run frontend tests
+        run: npm test
+
+      # Catch build breakage before a release tag does (the flamapy wheels are
+      # not needed for the bundle to build — Vite just copies public/).
+      - name: Build
+        run: npm run build

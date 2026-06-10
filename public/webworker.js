@@ -8,13 +8,15 @@ let flamapyReadyPromise = loadFlamapyWorker()
   .then(() => self.postMessage({ status: "loaded", pluginsConfig: self.flamapy.getPluginsConfig() }))
   .catch((exception) => self.postMessage({ status: "error", exception }));
 
-self.onmessage = async (event) => {
+async function handleMessage(event) {
   await flamapyReadyPromise;
   const { action, data, msgId } = event.data;
   try {
     let results;
     if (action === "validateModel") {
       results = await self.flamapy.validateModel(data);
+    } else if (action === "getModelInformation") {
+      results = await self.flamapy.getModelInformation();
     } else if (action === "executeFacadeOperation") {
       results = await self.flamapy.executeFacadeOperation(data);
     } else if (action === "executeFacadeOperationWithConfig") {
@@ -61,4 +63,21 @@ self.onmessage = async (event) => {
     console.error(error);
     self.postMessage({ error: error.message, action, msgId });
   }
+}
+
+// Messages are processed strictly one at a time: the handler is async (it
+// awaits Pyodide), so without this chain two in-flight calls would interleave
+// on the shared Python globals (fm, isValid, files on the Pyodide FS).
+let messageQueue = Promise.resolve();
+
+self.onmessage = (event) => {
+  // The interrupt buffer must bypass the queue — its whole point is to act
+  // while an operation is still running.
+  if (event.data?.command === "setInterruptBuffer") {
+    flamapyReadyPromise.then(() =>
+      self.flamapy.setInterruptBuffer(event.data.buffer)
+    );
+    return;
+  }
+  messageQueue = messageQueue.then(() => handleMessage(event));
 };

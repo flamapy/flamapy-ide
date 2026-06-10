@@ -1,5 +1,6 @@
 /* eslint-disable react/prop-types */
 import { useState } from "react";
+import Modal from "./ui/Modal";
 import { DEFAULT_REST_URL } from "../utils/computeBackend";
 
 // Lets the user point the "Remote API" compute backend at a flamapy-rest server.
@@ -15,8 +16,7 @@ function BackendSettingsModal({ url, onSave, onCancel }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-75">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
+    <Modal onClose={onCancel}>
         <h3 className="text-xl font-bold mb-1 text-gray-800 dark:text-gray-200">
           Remote API backend
         </h3>
@@ -68,8 +68,7 @@ function BackendSettingsModal({ url, onSave, onCancel }) {
             Save
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 

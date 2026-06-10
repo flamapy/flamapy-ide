@@ -1,0 +1,29 @@
+# Keep the Docker build context small and the layers reproducible.
+# NOTE: public/ (including the 17MB vendored pyodide runtime) must stay in the
+# context — Vite copies it into dist/ and the wheels stage reads public/flamapy.
+
+.git
+.github
+.claude
+node_modules
+dist
+dist-ssr
+
+# Python tooling / tests (the wheels stage only needs Makefile, scripts/,
+# flamapy.version and public/flamapy)
+tests
+.pytest_cache
+__pycache__
+**/__pycache__
+env
+.venv
+
+# Local files
+*.log
+.env
+.env.*
+.DS_Store
+.vscode
+.idea
+CLAUDE.md
+start_coding.sh

@@ -35,7 +35,6 @@ class CustomErrorListener(ErrorListener):
                 f"The UVL has the following warning that prevents reading it: "
                 f"Line {line}:{column} - {msg}"
             )
-            print(warning_message)
             self.warnings.append(warning_message)
         else:
             error_message = (
@@ -81,7 +80,10 @@ def process_uvl_file(file_path):
                 errors.append('The following feature is duplicated: {}'.format(duplicated))
             return json.dumps({'valid': False, 'errors': errors})
 
-        return json.dumps({'valid': True, 'modelInformation': get_model_information()})
+        # Model metrics are NOT computed here: validation runs on (debounced)
+        # keystrokes and some metrics (core features, atomic sets) are full
+        # analyses. The IDE requests them separately via get_model_information_json.
+        return json.dumps({'valid': True})
     except Exception as e:
         error_message = str(e)
         return json.dumps({'valid': False, 'errors': [error_message]})
@@ -99,6 +101,10 @@ def get_model_information():
     model_information['Core Features'] = fm.core_features()
     model_information['Leaf Features'] = fm.leaf_features()
     return model_information
+
+
+def get_model_information_json():
+    return json.dumps(get_model_information())
 
 
 def get_language_level(fm: FLAMAFeatureModel):
@@ -251,9 +257,7 @@ def get_features():
 def get_numerical_attributes():
     if fm:
         attributes = {attr.name for attr in fm.fm_model.get_attributes() if attr.attribute_type in [AttributeType.INTEGER, AttributeType.REAL]}
-        attributes = list(attributes)
-        print("Numerical attributes:", attributes)
-        return attributes
+        return list(attributes)
 
 def get_configuration_distribution():
     dm = DiscoverMetamodels()
@@ -279,7 +283,6 @@ def get_feature_inclusion_probabilities():
     return {'x': x_axis, 'y': y_axis, 'colors': colors}
 
 def get_feature_flow_map(attribute_name: str):
-    print(f"Generating feature flow map for attribute: {attribute_name}")
     def get_feature_value(feature):
         attrs = feature.get_attributes()
         if not attrs:
@@ -298,15 +301,11 @@ def get_feature_flow_map(attribute_name: str):
         if children:
             node["children"] = [build_node(child) for child in children]
         return node
-    root = fm.fm_model.root
-    result = build_node(root)
-    print("Feature Flow Map result:", result)
-    return result
+    return build_node(fm.fm_model.root)
 
 def execute_attribute_optimization(attributes_goals):
     if not _z3_available:
         return ["Z3 plugin is not installed."]
-    print("Attributes goals received:", attributes_goals)
 
     feature_model = fm.fm_model
     z3_model = FmToZ3(feature_model).transform()

@@ -6,6 +6,10 @@ import * as Y from "yjs";
 import { WebsocketProvider } from "y-websocket";
 import { MonacoBinding } from "y-monaco";
 
+// Validation parses the model and rebuilds it in Pyodide — far too heavy to run
+// on every keystroke, so editor changes are debounced.
+const VALIDATE_DEBOUNCE_MS = 400;
+
 function UVLEditor({
   editorRef,
   validateModel,
@@ -18,8 +22,22 @@ function UVLEditor({
   const collabRefs = useRef({ provider: null, ydoc: null });
   const monacoRef = useRef(null);
 
+  // Keep the latest validateModel without re-creating the debounced handler.
+  const validateRef = useRef(validateModel);
+  validateRef.current = validateModel;
+  const debounceTimerRef = useRef(null);
+
+  function handleChange() {
+    clearTimeout(debounceTimerRef.current);
+    debounceTimerRef.current = setTimeout(
+      () => validateRef.current(),
+      VALIDATE_DEBOUNCE_MS
+    );
+  }
+
   useEffect(() => {
     return () => {
+      clearTimeout(debounceTimerRef.current);
       collabRefs.current?.provider?.destroy();
       collabRefs.current?.ydoc?.destroy();
     };
@@ -214,7 +232,7 @@ function UVLEditor({
           defaultValue={collabConfig?.enabled ? "" : defaultCode}
           theme={darkMode ? "vs-dark" : "vs"}
           onMount={handleEditorDidMount}
-          onChange={validateModel}
+          onChange={handleChange}
           options={{
             insertSpaces: false,
             tabSize: 4,

@@ -5,7 +5,7 @@ import Question from "./Question";
 import Information from "./Information";
 import Configuration from "./Configuration";
 
-function Wizzard({ call, setHistory }) {
+function Wizard({ call, setHistory }) {
   const applyURL = import.meta.env?.VITE_APPLY_CONFIGURATION_URL;
 
   const [isImported, setIsImported] = useState(false);
@@ -123,4 +123,4 @@ function Wizzard({ call, setHistory }) {
   );
 }
 
-export default Wizzard;
+export default Wizard;

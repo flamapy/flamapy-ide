@@ -13,14 +13,16 @@ import StatusBar from "../../components/layout/StatusBar";
 import { saveAs } from "file-saver";
 import TreeView from "../../components/FeatureTree";
 import FeatureModelVisualization from "../../components/FeatureModelVisualization";
-import Wizzard from "../../components/Wizzard";
+import Wizard from "../../components/Wizard";
 import ProductDistributionChart from "../../components/ProductDistributionChart";
 import FeatureInclusionProbabilitiesChart from "../../components/FeatureInclusionProbabilitiesChart";
 import FeatureFlowMap from "../../components/FeatureFlowMap";
-import ParetoFrontChart from "../../components/ParentoFrontChart";
+import ParetoFrontChart from "../../components/ParetoFrontChart";
 import ErrorBoundary from "../../components/ErrorBoundary";
 import OperationInputModal from "../../components/OperationInputModal";
 import BackendSettingsModal from "../../components/BackendSettingsModal";
+import AttributeOptimizationModal from "../../components/AttributeOptimizationModal";
+import AttributeSelectionModal from "../../components/AttributeSelectionModal";
 import JSZip from "jszip";
 import { useWorkerClient } from "../../hooks/useWorkerClient";
 import {
@@ -139,7 +141,7 @@ function EditorPage({ selectedFile, darkMode, toggleDark }) {
     ? { enabled: true, docId: docIdFromQuery, endpoint: collabEndpoint }
     : { enabled: false };
 
-  const { isLoaded, pluginsConfig, call, restart } = useWorkerClient();
+  const { isLoaded, pluginsConfig, call, interrupt, restart } = useWorkerClient();
 
   const [isRunning, setIsRunning] = useState(false);
   const [isImported, setIsImported] = useState(true);
@@ -155,6 +157,9 @@ function EditorPage({ selectedFile, darkMode, toggleDark }) {
   const [uvlhubMessage, setUvlhubMessage] = useState("");
   const [collabStatus, setCollabStatus] = useState("");
   const [initialContent, setInitialContent] = useState("");
+  // Model metrics (right panel) — fetched separately from validation because
+  // some metrics are full analyses and must not run on every (debounced) keystroke.
+  const [modelInfo, setModelInfo] = useState(null);
   const [featureTree, setFeatureTree] = useState(null);
   const [currentView, setCurrentView] = useState("source");
   const [constraints, setConstraints] = useState(null);
@@ -190,6 +195,9 @@ function EditorPage({ selectedFile, darkMode, toggleDark }) {
   const [restApiUrl, setRestApiUrl] = useState(loadRestUrl);
   const [isBackendModalOpen, setIsBackendModalOpen] = useState(false);
   const editorRef = useRef(null);
+  // The exact editor content the current `validation` state refers to; lets
+  // ensureValidated() skip revalidation only when nothing changed since.
+  const lastValidatedCodeRef = useRef(null);
 
   const selectBackend = useCallback((backend) => {
     setComputeBackend(backend);
@@ -353,22 +361,48 @@ function EditorPage({ selectedFile, darkMode, toggleDark }) {
     }
     return call("validateModel", code)
       .then((result) => {
+        lastValidatedCodeRef.current = code;
         setValidation(result);
+        setModelInfo(null); // metrics refer to the previous model — refetch on demand
         setConstraints(getConstraints(code));
         return result;
       })
-      .catch(() => {
+      .catch((error) => {
         setOutput({
           label: "Validation error",
-          result: "An exception occurred validating the model. Try restarting Flamapy.",
+          result: `An exception occurred validating the model: ${error.message}. Try restarting Flamapy.`,
         });
         return null;
       });
   }
 
+  // Operations must run against the code currently in the editor: reuse the
+  // last validation only if the content hasn't changed since (typing-triggered
+  // validation is debounced, so `validation` alone can be stale).
+  async function ensureValidated() {
+    if (validation && editorRef.current?.getValue() === lastValidatedCodeRef.current) {
+      return validation;
+    }
+    return await validateModel();
+  }
+
+  // The right panel's Validate button also computes the model metrics, which
+  // are deliberately excluded from per-keystroke validation (they include full
+  // analyses such as core features and atomic sets).
+  async function handleValidateClick() {
+    const result = await validateModel();
+    if (result?.valid) {
+      try {
+        setModelInfo(await call("getModelInformation"));
+      } catch (error) {
+        setOutput({ label: "Model information", result: error.message });
+      }
+    }
+  }
+
   async function executeAction(action) {
     if (!isLoaded) return;
-    const currentValidation = validation ?? await validateModel();
+    const currentValidation = await ensureValidated();
     if (!currentValidation?.valid) {
       setOutput({ label: action.label, result: "Error: the model is not valid. Fix syntax errors and retry." });
       return;
@@ -384,17 +418,6 @@ function EditorPage({ selectedFile, darkMode, toggleDark }) {
       }
       return;
     }
-
-    // if (action.value === "ffm") {
-    //   try {
-    //     const attrs = await call("getNumericalAttributes");
-    //     setNumericalAttributesSelection(attrs);
-    //     setIsAttrSelectionModalOpen(true);
-    //   } catch (error) {
-    //     setOutput({ label: "Attribute extraction error", result: error.message });
-    //   }
-    //   return;
-    // }
 
     if (action.input) {
       // Operation needs an extra argument: collect it via a modal, then run.
@@ -437,15 +460,24 @@ function EditorPage({ selectedFile, darkMode, toggleDark }) {
       }
       setOutput({ label: action.label, result });
     } catch (error) {
-      setOutput({
-        label: action.label,
-        result:
-          computeBackend === REST
-            ? `Remote API error: ${error.message}`
-            : "An exception occurred. Check the model definition.",
-      });
+      setOutput({ label: action.label, result: describeError(error) });
     }
     setIsRunning(false);
+  }
+
+  // Turn a worker/REST failure into a message the user can act on. The worker
+  // forwards the real Python error; an interrupt surfaces as KeyboardInterrupt.
+  function describeError(error) {
+    const message = error?.message || "";
+    if (message.includes("KeyboardInterrupt")) {
+      return "Operation interrupted.";
+    }
+    if (computeBackend === REST) {
+      return `Remote API error: ${message}`;
+    }
+    return message
+      ? `Error: ${message}`
+      : "An exception occurred. Check the model definition.";
   }
 
   function confirmInputOperation(value) {
@@ -456,7 +488,7 @@ function EditorPage({ selectedFile, darkMode, toggleDark }) {
 
   async function executeActionWithConf(action, configuration) {
     if (!isLoaded) return;
-    const currentValidation = validation ?? await validateModel();
+    const currentValidation = await ensureValidated();
     if (!currentValidation?.valid) {
       setOutput({ label: action.label, result: "Error: the model is not valid. Fix syntax errors and retry." });
       return;
@@ -483,13 +515,7 @@ function EditorPage({ selectedFile, darkMode, toggleDark }) {
         }
         setOutput({ label: action.label, result });
       } catch (error) {
-        setOutput({
-          label: action.label,
-          result:
-            computeBackend === REST
-              ? `Remote API error: ${error.message}`
-              : "An exception occurred. Check the model definition.",
-        });
+        setOutput({ label: action.label, result: describeError(error) });
       }
       setIsRunning(false);
     } else if (action.value === "configurator") {
@@ -506,18 +532,25 @@ function EditorPage({ selectedFile, darkMode, toggleDark }) {
         saveAs(await zip.generateAsync({ type: "blob" }), "configurator.zip");
       } catch (err) {
         console.error("Error processing ZIP:", err);
-        alert("Failed to generate ZIP.");
+        setOutput({ label: "Download Configurator", result: `Failed to generate the configurator ZIP: ${err.message}` });
       }
     }
   }
 
   function interruptExecution() {
-    if (isLoaded) {
-      restart();
-      setIsRunning(false);
-      setValidation(null);
-      setOutput({ label: "Execution interrupted", result: "Re-starting Flamapy..." });
+    if (!isLoaded) return;
+    // Fast path: raise KeyboardInterrupt inside the running Python operation
+    // (needs cross-origin isolation). The pending call rejects and is shown as
+    // "Operation interrupted." — Flamapy itself stays loaded.
+    if (interrupt()) {
+      setOutput({ label: "Execution interrupted", result: "Stopping the running operation…" });
+      return;
     }
+    // Fallback (no SharedArrayBuffer): tear down and reload the whole runtime.
+    restart();
+    setIsRunning(false);
+    setValidation(null);
+    setOutput({ label: "Execution interrupted", result: "Re-starting Flamapy..." });
   }
 
   async function downloadFile(action) {
@@ -532,7 +565,7 @@ function EditorPage({ selectedFile, darkMode, toggleDark }) {
 
   async function toggleView(option) {
     if (!isLoaded) return;
-    const currentValidation = validation ?? await validateModel();
+    const currentValidation = await ensureValidated();
     if (!currentValidation?.valid) {
       const messages = {
         graph: "The model is not valid. Fix syntax errors before visualizing.",
@@ -599,8 +632,12 @@ function EditorPage({ selectedFile, darkMode, toggleDark }) {
     setCurrentView(option.value);
   }
 
+  // Browsers and intermediaries start rejecting URLs in the low tens of KB;
+  // stay safely below that when embedding the whole model in a link.
+  const MAX_SHARE_URL_LENGTH = 8000;
+
   async function handleSaveToUVLHub() {
-    const currentValidation = validation ?? await validateModel();
+    const currentValidation = await ensureValidated();
     if (!currentValidation?.valid) {
       setUvlhubMessage("Model must be valid");
       setTimeout(() => setUvlhubMessage(""), 2000);
@@ -608,6 +645,11 @@ function EditorPage({ selectedFile, darkMode, toggleDark }) {
     }
     const code = editorRef.current?.getValue() || "";
     const encoded = btoa(unescape(encodeURIComponent(code)));
+    if (encoded.length > MAX_SHARE_URL_LENGTH) {
+      setUvlhubMessage("Model too large to send as a link");
+      setTimeout(() => setUvlhubMessage(""), 3000);
+      return;
+    }
     const rawEndpoint = new URL("/raw/model.uvl", window.location.href);
     rawEndpoint.searchParams.set("model", encoded);
     const uvlhubBase = import.meta.env.VITE_UVLHUB_URL || "https://www.uvlhub.io";
@@ -619,6 +661,11 @@ function EditorPage({ selectedFile, darkMode, toggleDark }) {
   async function handleCopyModelLink() {
     const code = editorRef.current?.getValue() || "";
     const encoded = btoa(unescape(encodeURIComponent(code)));
+    if (encoded.length > MAX_SHARE_URL_LENGTH) {
+      setShareMessage("Model too large to share as a link");
+      setTimeout(() => setShareMessage(""), 3000);
+      return;
+    }
     const url = new URL("/editor", window.location.href);
     url.searchParams.set("model", encoded);
     try {
@@ -711,7 +758,7 @@ function EditorPage({ selectedFile, darkMode, toggleDark }) {
         setOutput({ label: result.label, result: result.result.results_str });
         setParetoFrontData(result.result);
       })
-      .catch(() => setOutput({ label: "Attribute Optimization", result: "An exception occurred. Check the model definition." }))
+      .catch((error) => setOutput({ label: "Attribute Optimization", result: describeError(error) }))
       .finally(() => setIsRunning(false));
     closeAttrOptModal();
   }
@@ -735,7 +782,7 @@ function EditorPage({ selectedFile, darkMode, toggleDark }) {
         setOutput(result);
         setFfmData(result);
       })
-      .catch(() => setOutput({ label: "Feature Flow Map", result: "An exception occurred. Check the model definition." }))
+      .catch((error) => setOutput({ label: "Feature Flow Map", result: describeError(error) }))
       .finally(() => setIsRunning(false));
     closeAttrSelectionModal();
   }
@@ -848,7 +895,7 @@ function EditorPage({ selectedFile, darkMode, toggleDark }) {
               </div>
             )}
             {currentView === "configurator" && (
-              <Wizzard call={call} setHistory={setHistory} />
+              <Wizard call={call} setHistory={setHistory} />
             )}
           </div>
 
@@ -864,7 +911,11 @@ function EditorPage({ selectedFile, darkMode, toggleDark }) {
         </div>
 
         {modelInfoOpen && (
-          <ModelInformation onValidateModel={validateModel} validation={validation} />
+          <ModelInformation
+            onValidateModel={handleValidateClick}
+            validation={validation}
+            modelInfo={modelInfo}
+          />
         )}
       </div>
 
@@ -881,155 +932,23 @@ function EditorPage({ selectedFile, darkMode, toggleDark }) {
       />
 
       {isAttrOptModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-75">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-3xl w-full mx-4 p-6">
-            <h3 className="text-xl font-bold mb-4 text-gray-800 dark:text-gray-200">Select Optimization Goals</h3>
-            <div className="max-h-96 overflow-y-auto border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 p-3 rounded">
-              {numericalAttributes && numericalAttributes.length > 0 ? (
-                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                  <thead className="bg-gray-100 dark:bg-gray-700 sticky top-0">
-                    <tr>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Optimize</th>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Attribute</th>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Goal</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                    {numericalAttributes.map((attribute) => {
-                      const isSelected = optimizationGoals[attribute]?.selected || false;
-                      const goal = optimizationGoals[attribute]?.goal || "Minimize";
-                      return (
-                        <tr key={attribute}>
-                          <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={(e) => handleAttributeSelection(attribute, e.target.checked)}
-                              className="h-4 w-4 text-blue-600 border-gray-300 rounded"
-                            />
-                          </td>
-                          <td className="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
-                            {attribute}
-                          </td>
-                          <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                            <select
-                              value={goal}
-                              disabled={!isSelected}
-                              onChange={(e) => handleGoalChange(attribute, e.target.value)}
-                              className={`mt-1 block w-full py-1 px-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm sm:text-sm ${
-                                !isSelected ? "bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400" : "bg-white dark:bg-gray-600 dark:text-gray-200"
-                              }`}
-                            >
-                              <option value="Minimize">Minimize</option>
-                              <option value="Maximize">Maximize</option>
-                            </select>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              ) : (
-                <p className="text-sm text-red-500">No numerical attributes available in this model.</p>
-              )}
-            </div>
-            <div className="mt-6 flex justify-end space-x-3">
-              <button
-                className="px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-800 dark:text-gray-200 font-semibold rounded-md hover:bg-gray-400 dark:hover:bg-gray-500"
-                onClick={closeAttrOptModal}
-              >
-                Cancel
-              </button>
-              <button
-                className="px-4 py-2 bg-green-600 text-white font-semibold rounded-md hover:bg-green-700"
-                onClick={executeOptimization}
-              >
-                Execute Optimization
-              </button>
-            </div>
-          </div>
-        </div>
+        <AttributeOptimizationModal
+          attributes={numericalAttributes}
+          goals={optimizationGoals}
+          onToggle={handleAttributeSelection}
+          onGoalChange={handleGoalChange}
+          onExecute={executeOptimization}
+          onCancel={closeAttrOptModal}
+        />
       )}
       {isAttrSelectionModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-75">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-3xl w-full mx-4 p-6">
-            <h3 className="text-xl font-bold mb-4 text-gray-800 dark:text-gray-200">
-              Select Attribute
-            </h3>
-
-            <div className="max-h-96 overflow-y-auto border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 p-3 rounded">
-              {numericalAttributesSelection && numericalAttributesSelection.length > 0 ? (
-                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                  
-                  {/* HEADER */}
-                  <thead className="bg-gray-100 dark:bg-gray-700 sticky top-0">
-                    <tr>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                        Select
-                      </th>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                        Attribute
-                      </th>
-                    </tr>
-                  </thead>
-
-                  {/* BODY (igual estructura, solo simplificado) */}
-                  <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                    {numericalAttributesSelection.map((attribute) => {
-                      const isSelected = selectedAttribute === attribute;
-
-                      return (
-                        <tr key={attribute}>
-                          <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
-                            <input
-                              type="radio"
-                              name="attribute"
-                              checked={isSelected}
-                              onChange={() => setSelectedAttribute(attribute)}
-                              className="h-4 w-4 text-blue-600 border-gray-300"
-                            />
-                          </td>
-
-                          <td className="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
-                            {attribute}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-
-                </table>
-              ) : (
-                <p className="text-sm text-red-500">
-                  No numerical attributes available in this model.
-                </p>
-              )}
-            </div>
-
-            {/* BOTONES */}
-            <div className="mt-6 flex justify-end space-x-3">
-              <button
-                className="px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-800 dark:text-gray-200 font-semibold rounded-md hover:bg-gray-400 dark:hover:bg-gray-500"
-                onClick={closeAttrSelectionModal}
-              >
-                Cancel
-              </button>
-
-              <button
-                className="px-4 py-2 bg-green-600 text-white font-semibold rounded-md hover:bg-green-700"
-                onClick={() => {
-                  if (!selectedAttribute) {
-                    alert("Please select an attribute");
-                    return;
-                  }
-                  executeFlowMap();
-                }}
-              >
-                Confirm
-              </button>
-            </div>
-          </div>
-        </div>
+        <AttributeSelectionModal
+          attributes={numericalAttributesSelection}
+          selected={selectedAttribute}
+          onSelect={setSelectedAttribute}
+          onConfirm={executeFlowMap}
+          onCancel={closeAttrSelectionModal}
+        />
       )}
       {inputModal && (
         <OperationInputModal

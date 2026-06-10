@@ -6,13 +6,16 @@ import { vsBtnPrimary, ACCENT } from "./ui/styles";
 
 // Right-hand "Model information" panel. Validation errors/warnings now live in the
 // bottom PROBLEMS tab; this panel keeps the validate action and the model metrics.
+// Metrics (modelInfo) are computed on demand via the button — not on keystroke
+// validation — because some of them are full analyses.
 const ModelInformation = ({
   width = 300,
   minWidth = 180,
   maxWidth = 460,
-  buttonText = "Validate syntax",
+  buttonText = "Validate & compute metrics",
   onValidateModel,
   validation,
+  modelInfo,
 }) => {
   return (
     <ResizableBox
@@ -29,13 +32,13 @@ const ModelInformation = ({
         <button className={`${vsBtnPrimary} w-full justify-center`} onClick={onValidateModel}>
           {buttonText}
         </button>
-        {validation?.valid ? (
-          <ModelProperties modelProperties={validation.modelInformation} />
+        {validation?.valid && modelInfo ? (
+          <ModelProperties modelProperties={modelInfo} />
         ) : (
           <p className="text-[12px] text-gray-500 dark:text-gray-400">
-            {validation
+            {validation && !validation.valid
               ? "The model has problems — see the Problems tab."
-              : "Validate the model to see its metrics."}
+              : "Use the button above to compute the model metrics."}
           </p>
         )}
       </Card>

@@ -1,5 +1,5 @@
 # Stage 1: Base Image
-FROM node:18 AS base
+FROM node:22 AS base
 
 # Set working directory
 WORKDIR /app
@@ -7,8 +7,8 @@ WORKDIR /app
 # Copy package.json and package-lock.json for installation
 COPY package*.json ./
 
-# Install dependencies
-RUN npm install
+# Install dependencies (reproducible: exactly what package-lock.json pins)
+RUN npm ci
 
 # Copy the rest of the app
 COPY . .
@@ -66,6 +66,14 @@ COPY --from=wheels /app/public/flamapy ./public/flamapy
 # Build the app
 RUN npm run build
 
+# Stage 4.5: Runtime-only node_modules for the collab server. The full install in
+# `base` includes dev tooling (vite, eslint, tailwind…) that the prod image must
+# not ship; this stage installs only the runtime dependencies.
+FROM node:22 AS collab-deps
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --omit=dev
+
 # Stage 5: Production — a single self-contained image that serves the app AND runs
 # the collaboration backend, so deployers just `docker run` one image (no Node on
 # the host, no second container, no compose). nginx serves the static site on :80
@@ -86,7 +94,7 @@ WORKDIR /app
 # The built static site…
 COPY --from=build /app/dist /usr/share/nginx/html
 # …the collab server and its runtime deps (ws / y-websocket / yjs live in node_modules)…
-COPY --from=base /app/node_modules ./node_modules
+COPY --from=collab-deps /app/node_modules ./node_modules
 COPY --from=base /app/server ./server
 COPY --from=base /app/package.json ./package.json
 

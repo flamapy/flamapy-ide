@@ -11,7 +11,7 @@ import CookieConsent from "react-cookie-consent";
 import PageTracker from "./components/PageTracker";
 import getCookie from "./utils/getCookieValue";
 import CookiePreferences from "./pages/CookiePreferences";
-import PrivacyPolicy from "./pages/PivacyPolicy";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
 
 // Marketing / info pages keep the classic Navbar; the editor owns its own
 // VSCode-style chrome (title bar + toolbar + activity bar + status bar), so it
