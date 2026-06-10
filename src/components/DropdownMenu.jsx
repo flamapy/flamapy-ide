@@ -30,9 +30,9 @@ const DropdownMenu = ({
     setIsOpen((prev) => !prev);
   };
 
-  const handleAction = async (action) => {
-    await executeAction(action);
+  const handleAction = (action) => {
     setIsOpen(false);
+    executeAction(action);
   };
 
   const handleKeyDown = (e) => {
