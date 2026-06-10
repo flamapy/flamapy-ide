@@ -169,7 +169,7 @@ function EditorPage({ selectedFile, darkMode, toggleDark }) {
   const [panelTab, setPanelTab] = useState("output");
 
   // Plugin config synced from worker on load
-  const [enabledPlugins, setEnabledPlugins] = useState({ sat: true, bdd: true, z3: false });
+  const [enabledPlugins, setEnabledPlugins] = useState({ sat: true, bdd: true, z3: true });
 
   // Operation-argument modal state ({ action, options } while open, else null)
   const [inputModal, setInputModal] = useState(null);
