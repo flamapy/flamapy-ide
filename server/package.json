@@ -1,0 +1,16 @@
+{
+  "name": "flamapy-ide-collab-server",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Standalone runtime deps for the Y.js collaboration server bundled into the develop Docker image. Versions mirror the root package.json.",
+  "type": "module",
+  "main": "collab-server.js",
+  "scripts": {
+    "start": "node collab-server.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0",
+    "y-websocket": "^1.5.4",
+    "yjs": "^13.6.18"
+  }
+}
