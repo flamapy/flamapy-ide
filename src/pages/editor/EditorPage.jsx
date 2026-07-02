@@ -83,8 +83,14 @@ const OPERATIONS = [
   { method: "feature_bounds", label: "Feature bounds", solvers: ["z3"],
     input: { kind: "feature", arg: "variable_name", prompt: "Select a feature" } },
 
-  // Attribute optimization opens a dedicated modal (handled in executeAction).
-  { value: "Z3AttributeOptimization", label: "Attribute optimization", solvers: ["z3"], engine: "legacy" },
+  // SAT-only scalable/optimization operations exposed through the facade.
+  { method: "minimum_configuration", label: "Minimum configuration", solvers: ["sat"] },
+  { method: "t_wise_sampling", label: "T-wise sampling", solvers: ["sat"],
+    input: { kind: "integer", arg: "t", prompt: "t (interaction strength)", min: 1 } },
+
+  // Attribute optimization opens a dedicated modal (handled in executeAction). Backend-aware:
+  // SAT performs single-objective MaxSAT; z3 additionally supports multi-objective (Pareto).
+  { value: "AttributeOptimization", label: "Attribute optimization", solvers: ["sat", "z3"], engine: "legacy" },
 ];
 
 // FM-level operations: no backend, always available.
@@ -176,6 +182,7 @@ function EditorPage({ selectedFile, darkMode, toggleDark }) {
 
   // Z3 attribute optimization modal state
   const [isAttrOptModalOpen, setIsAttrOptModalOpen] = useState(false);
+  const [attrOptBackend, setAttrOptBackend] = useState("z3");
   const [numericalAttributes, setNumericalAttributes] = useState(null);
   const [optimizationGoals, setOptimizationGoals] = useState({});
 
@@ -408,10 +415,11 @@ function EditorPage({ selectedFile, darkMode, toggleDark }) {
       return;
     }
 
-    if (action.value === "Z3AttributeOptimization") {
+    if (action.engine === "legacy" && action.value === "AttributeOptimization") {
       try {
         const attrs = await call("getNumericalAttributes");
         setNumericalAttributes(attrs);
+        setAttrOptBackend(action.backendAware ? selectedSolver : "z3");
         setIsAttrOptModalOpen(true);
       } catch (error) {
         setOutput({ label: "Attribute extraction error", result: error.message });
@@ -753,7 +761,7 @@ function EditorPage({ selectedFile, darkMode, toggleDark }) {
     setIsRunning(true);
     setOutput({ label: "Attribute Optimization", result: "Executing operation" });
     setCurrentView("paretofront");
-    call("executeAttributeOptimization", selectedGoals)
+    call("executeAttributeOptimization", { goals: selectedGoals, backend: attrOptBackend })
       .then((result) => {
         setOutput({ label: result.label, result: result.result.results_str });
         setParetoFrontData(result.result);

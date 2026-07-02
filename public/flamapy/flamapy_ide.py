@@ -18,6 +18,16 @@ try:
 except ImportError:
     _z3_available = False
 
+# SAT MaxSAT optimization is a newer flamapy-sat operation; guard the import so the IDE
+# keeps working against flamapy-sat releases that predate it.
+try:
+    from flamapy.metamodels.pysat_metamodel.transformations import FmToPysat
+    from flamapy.metamodels.pysat_metamodel.operations import PySATAttributeOptimization
+    from flamapy.core.operations import OptimizationGoal as _CoreOptimizationGoal
+    _sat_optimization_available = True
+except ImportError:
+    _sat_optimization_available = False
+
 
 fm = None
 configurator = None
@@ -303,9 +313,12 @@ def get_feature_flow_map(attribute_name: str):
         return node
     return build_node(fm.fm_model.root)
 
-def execute_attribute_optimization(attributes_goals):
+def execute_attribute_optimization(attributes_goals, backend='z3'):
+    if backend == 'sat':
+        return _execute_attribute_optimization_sat(attributes_goals)
+
     if not _z3_available:
-        return ["Z3 plugin is not installed."]
+        return json.dumps({'results_str': ["Z3 plugin is not installed."], 'objectives': [], 'solutions': []})
 
     feature_model = fm.fm_model
     z3_model = FmToZ3(feature_model).transform()
@@ -329,6 +342,35 @@ def execute_attribute_optimization(attributes_goals):
         results_str.append(f'Config. {i}: {config_str} | {values_str}')
         attr_values = [values[attr] for attr in attributes.keys()]
         results['solutions'].append({'name': f'Config. {i}', 'configuration': config_str, 'values': attr_values})
+    results['results_str'] = results_str
+    return json.dumps(results)
+
+def _execute_attribute_optimization_sat(attributes_goals):
+    if not _sat_optimization_available:
+        return json.dumps({'objectives': [], 'solutions': [],
+                           'results_str': ["SAT attribute optimization is not available in this build."]})
+    if len(attributes_goals) != 1:
+        return json.dumps({'objectives': [], 'solutions': [],
+                           'results_str': ["The SAT backend optimizes a single attribute. Select exactly "
+                                           "one, or use z3 for multi-objective optimization."]})
+
+    attr_name = attributes_goals[0]['attribute']
+    goal_str = attributes_goals[0]['goal']
+    goal = _CoreOptimizationGoal.MINIMIZE if goal_str == 'Minimize' else _CoreOptimizationGoal.MAXIMIZE
+
+    sat_model = FmToPysat(fm.fm_model).transform()
+    op = PySATAttributeOptimization()
+    op.set_attributes({attr_name: goal})
+    configurations = op.execute(sat_model).get_result()
+    optimum = op.get_optimum().get(attr_name)
+
+    results_str = []
+    results = {'objectives': [attr_name], 'solutions': []}
+    for i, config in enumerate(configurations, 1):
+        config_str = ', '.join(f'{f}' for f in config.elements if config.is_selected(f))
+        results_str.append(f'Config. {i}: {config_str} | {attr_name}={optimum}')
+        results['solutions'].append({'name': f'Config. {i}', 'configuration': config_str,
+                                     'values': [optimum]})
     results['results_str'] = results_str
     return json.dumps(results)
 

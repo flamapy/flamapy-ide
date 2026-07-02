@@ -167,11 +167,12 @@ process_uvl_file('uvlfile.uvl')
 
   async executeAttributeOptimization(data) {
     this.requireValidModel();
-    this.pyodide.globals.set("attr_goals_json", JSON.stringify(data));
+    this.pyodide.globals.set("attr_goals_json", JSON.stringify(data.goals));
+    this.pyodide.globals.set("attr_backend", data.backend || "z3");
     const jsonResult = await this.pyodide.runPythonAsync(
-      `execute_attribute_optimization(json.loads(attr_goals_json))`
+      `execute_attribute_optimization(json.loads(attr_goals_json), attr_backend)`
     );
-    const goals = data.map((item) => `${item.goal} ${item.attribute}`).join(", ");
+    const goals = data.goals.map((item) => `${item.goal} ${item.attribute}`).join(", ");
     const response = { label: `Optimum Configurations (Goals: ${goals})`, result: JSON.parse(jsonResult) };
     return response;
   }
