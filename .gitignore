@@ -23,8 +23,10 @@ dist-ssr
 *.sln
 *.sw?
 .venv
+__pycache__/
 */__pycache__
 */*/__pycache__
+.pytest_cache/
 
 env/
 
@@ -47,3 +49,8 @@ start_coding.sh
 public/flamapy/*.whl
 !public/flamapy/flamapy_configurator-*.whl
 !public/flamapy/z3_solver-*.whl
+
+# The served manifest carries versioned wheel filenames, so it too is a build
+# artifact: `make build-wheels` generates it from the tracked, version-less
+# plugins.conf.template.json. Only the template is committed.
+public/flamapy/plugins.conf.json

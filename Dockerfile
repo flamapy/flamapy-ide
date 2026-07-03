@@ -1,5 +1,5 @@
 # Stage 1: Base Image
-FROM node:18 AS base
+FROM node:22 AS base
 
 # Set working directory
 WORKDIR /app
@@ -7,8 +7,8 @@ WORKDIR /app
 # Copy package.json and package-lock.json for installation
 COPY package*.json ./
 
-# Install dependencies
-RUN npm install
+# Install dependencies (reproducible: exactly what package-lock.json pins)
+RUN npm ci
 
 # Copy the rest of the app
 COPY . .
@@ -33,6 +33,7 @@ CMD ["npm", "run", "dev", "--", "--host"]
 FROM python:3.11 AS wheels
 WORKDIR /app
 COPY Makefile flamapy.version ./
+COPY scripts ./scripts
 COPY public/flamapy ./public/flamapy
 RUN make build-wheels
 
@@ -48,29 +49,61 @@ ENV NODE_ENV=production
 ARG VITE_GA_MEASUREMENT_ID
 ENV VITE_GA_MEASUREMENT_ID=$VITE_GA_MEASUREMENT_ID
 
+# Collaboration is a build-time Vite flag. The all-in-one image below ships the
+# collab backend in the same container (nginx reverse-proxies it at /collab), so
+# it is ON by default. VITE_COLLAB_URL is left empty on purpose: the frontend then
+# derives the WebSocket URL from the page's own origin (ws(s)://<host>/collab), so
+# the same image works on localhost or any domain with no rebuild. Set the arg only
+# to point at an external collab server instead.
+ARG VITE_ENABLE_COLLAB=true
+ARG VITE_COLLAB_URL=
+ENV VITE_ENABLE_COLLAB=$VITE_ENABLE_COLLAB
+ENV VITE_COLLAB_URL=$VITE_COLLAB_URL
+
 # Pull in the regenerated wheels so Vite copies them into dist/
 COPY --from=wheels /app/public/flamapy ./public/flamapy
 
 # Build the app
 RUN npm run build
 
-# Stage 4: Production - Nginx for serving static files
+# Stage 4.5: Runtime-only node_modules for the collab server. The full install in
+# `base` includes dev tooling (vite, eslint, tailwind…) that the prod image must
+# not ship; this stage installs only the runtime dependencies.
+FROM node:22 AS collab-deps
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --omit=dev
+
+# Stage 5: Production — a single self-contained image that serves the app AND runs
+# the collaboration backend, so deployers just `docker run` one image (no Node on
+# the host, no second container, no compose). nginx serves the static site on :80
+# and reverse-proxies /collab to the Y.js WebSocket server running on localhost:1234
+# inside this same container; an entrypoint starts both processes.
 FROM nginx:alpine AS prod
 
-# Set environment to production
 ENV NODE_ENV=production
+# The collab server only needs to be reachable by nginx within the container.
+ENV COLLAB_HOST=127.0.0.1
+ENV COLLAB_PORT=1234
 
-# Copy built files from the build stage
+# nginx:alpine bundles the njs module (used by /raw); add Node for the collab server.
+RUN apk add --no-cache nodejs
+
+WORKDIR /app
+
+# The built static site…
 COPY --from=build /app/dist /usr/share/nginx/html
+# …the collab server and its runtime deps (ws / y-websocket / yjs live in node_modules)…
+COPY --from=collab-deps /app/node_modules ./node_modules
+COPY --from=base /app/server ./server
+COPY --from=base /app/package.json ./package.json
 
-# Copy custom Nginx configuration
+# nginx config (now also proxies /collab) + the njs /raw handler + the entrypoint.
 COPY nginx.conf /etc/nginx/nginx.conf
-
-# Copy njs script for the /raw endpoint (UVLHub integration)
 COPY nginx/raw.js /etc/nginx/njs/raw.js
+COPY docker/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
-# Expose port 80 for the Nginx server
 EXPOSE 80
 
-# Start Nginx
-CMD ["nginx", "-g", "daemon off;"]
+CMD ["/entrypoint.sh"]

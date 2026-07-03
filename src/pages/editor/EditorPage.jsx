@@ -3,53 +3,119 @@ import { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import "react-resizable/css/styles.css";
 import ModelInformation from "../../components/ModelInformation";
-import ExecutionOutput from "../../components/ExecutionOutput";
 import UVLEditor from "../../components/UVLEditor";
-import DropdownMenu from "../../components/DropdownMenu";
+import TitleBar from "../../components/layout/TitleBar";
+import ActionToolbar from "../../components/layout/ActionToolbar";
+import ActivityBar from "../../components/layout/ActivityBar";
+import EditorTabs from "../../components/layout/EditorTabs";
+import BottomPanel from "../../components/layout/BottomPanel";
+import StatusBar from "../../components/layout/StatusBar";
 import { saveAs } from "file-saver";
 import TreeView from "../../components/FeatureTree";
 import FeatureModelVisualization from "../../components/FeatureModelVisualization";
-import Wizzard from "../../components/Wizzard";
+import Wizard from "../../components/Wizard";
 import ProductDistributionChart from "../../components/ProductDistributionChart";
 import FeatureInclusionProbabilitiesChart from "../../components/FeatureInclusionProbabilitiesChart";
 import FeatureFlowMap from "../../components/FeatureFlowMap";
-import ParetoFrontChart from "../../components/ParentoFrontChart";
+import ParetoFrontChart from "../../components/ParetoFrontChart";
 import ErrorBoundary from "../../components/ErrorBoundary";
+import OperationInputModal from "../../components/OperationInputModal";
+import BackendSettingsModal from "../../components/BackendSettingsModal";
+import AttributeOptimizationModal from "../../components/AttributeOptimizationModal";
+import AttributeSelectionModal from "../../components/AttributeSelectionModal";
 import JSZip from "jszip";
 import { useWorkerClient } from "../../hooks/useWorkerClient";
+import {
+  WASM,
+  REST,
+  loadBackend,
+  saveBackend,
+  loadRestUrl,
+  saveRestUrl,
+  executeRestOperation,
+  executeRestOperationWithConfig,
+} from "../../utils/computeBackend";
 
-// Full operation lists per solver — shown only when that plugin is enabled
-const ALL_SOLVER_OPERATIONS = {
-  sat: [
-    { label: "Configurations", value: "PySATConfigurations" },
-    { label: "Number of configurations", value: "PySATConfigurationsNumber" },
-    { label: "Dead features", value: "PySATDeadFeatures" },
-    { label: "Diagnosis", value: "PySATDiagnosis" },
-    { label: "False optional features", value: "PySATFalseOptionalFeatures" },
-    { label: "Satisfiable", value: "PySATSatisfiable" },
-  ],
-  bdd: [
-    { label: "Configurations", value: "BDDConfigurations" },
-    { label: "Number of configurations", value: "BDDConfigurationsNumber" },
-    { label: "Dead features", value: "BDDDeadFeatures" },
-    { label: "Satisfiable", value: "BDDSatisfiable" },
-    { label: "Configuration distribution", value: "BDDProductDistribution" },
-    { label: "Feature inclusion probability", value: "BDDFeatureInclusionProbability" },
-    { label: "Unique features", value: "BDDUniqueFeatures" },
-    { label: "Homogeneity", value: "BDDHomogeneity" },
-    { label: "Variability", value: "BDDVariability" },
-    { label: "Variant features", value: "BDDVariantFeatures" },
-  ],
-  z3: [
-    { label: "Satisfiable", value: "Z3Satisfiable" },
-    { label: "Configurations", value: "Z3Configurations" },
-    { label: "Number of configurations", value: "Z3ConfigurationsNumber" },
-    { label: "Core features", value: "Z3CoreFeatures" },
-    { label: "Dead features", value: "Z3DeadFeatures" },
-    { label: "False-optional features", value: "Z3FalseOptionalFeatures" },
-    { label: "Attribute optimization", value: "Z3AttributeOptimization" },
-  ],
-};
+// Canonical operation table — the single source of truth for every analysis the IDE
+// exposes. Each row is one FLAMAFeatureModel facade method (`method`); the per-solver
+// menus and any other capability-driven view derive from this array.
+//
+//  - No `solvers`  → FM-level structural operation, always available, no backend.
+//  - `solvers`     → backends that implement it. The facade takes a `backend` kwarg
+//                    exactly when more than one backend supports the operation, so
+//                    `backendAware` is derived (see operationsForSolver) rather than set.
+//  - `engine: "legacy"` → not yet on the facade (needs extra UI: config input or a
+//                    dedicated modal); dispatched by the raw class name in `value`.
+//  - `input`       → the operation needs one extra argument collected from the user
+//                    before running: { kind: "feature"|"integer", arg, prompt, min? }.
+//                    `arg` is the facade keyword the collected value is passed as.
+const OPERATIONS = [
+  // FM-level structural operations (flamapy-fm is always present)
+  { method: "metrics", label: "Metrics" },
+  { method: "atomic_sets", label: "Atomic sets" },
+  { method: "variation_points", label: "Variation points" },
+  { method: "leaf_features", label: "Leaf features" },
+  { method: "average_branching_factor", label: "Average branching factor" },
+  { method: "count_leafs", label: "Leaf count" },
+  { method: "max_depth", label: "Max depth" },
+  { method: "estimated_number_of_configurations", label: "Estimated configurations" },
+  { method: "feature_ancestors", label: "Feature ancestors",
+    input: { kind: "feature", arg: "feature_name", prompt: "Select a feature" } },
+
+  // Analysis operations — `solvers` is the single source of truth for backend support
+  { method: "satisfiable", label: "Satisfiable", solvers: ["sat", "bdd", "z3"] },
+  { method: "configurations", label: "Configurations", solvers: ["sat", "bdd", "z3"] },
+  { method: "configurations_number", label: "Number of configurations", solvers: ["sat", "bdd", "z3"] },
+  { method: "dead_features", label: "Dead features", solvers: ["sat", "bdd", "z3"] },
+  { method: "core_features", label: "Core features", solvers: ["sat", "z3"] },
+  { method: "false_optional_features", label: "False optional features", solvers: ["sat", "z3"] },
+  { method: "sampling", label: "Sampling", solvers: ["sat", "bdd"],
+    input: { kind: "integer", arg: "size", prompt: "Sample size", min: 1 } },
+  { method: "backbone", label: "Backbone", solvers: ["sat"] },
+  { method: "unique_features", label: "Unique features", solvers: ["bdd"] },
+  { method: "variant_features", label: "Variant features", solvers: ["bdd"] },
+  { method: "pure_optional_features", label: "Pure optional features", solvers: ["bdd"] },
+  { method: "homogeneity", label: "Homogeneity", solvers: ["bdd"] },
+  { method: "variability", label: "Variability", solvers: ["bdd"] },
+  { method: "configurations_with_n_features", label: "Configurations with N features", solvers: ["bdd"],
+    input: { kind: "integer", arg: "n", prompt: "Number of selected features", min: 0 } },
+  { method: "all_feature_bounds", label: "Feature bounds (all)", solvers: ["z3"] },
+  { method: "feature_bounds", label: "Feature bounds", solvers: ["z3"],
+    input: { kind: "feature", arg: "variable_name", prompt: "Select a feature" } },
+
+  // SAT-only scalable/optimization operations exposed through the facade.
+  { method: "minimum_configuration", label: "Minimum configuration", solvers: ["sat"] },
+  { method: "t_wise_sampling", label: "T-wise sampling", solvers: ["sat"],
+    input: { kind: "integer", arg: "t", prompt: "t (interaction strength)", min: 1 } },
+
+  // Attribute optimization opens a dedicated modal (handled in executeAction). Backend-aware:
+  // SAT performs single-objective MaxSAT; z3 additionally supports multi-objective (Pareto).
+  { value: "AttributeOptimization", label: "Attribute optimization", solvers: ["sat", "z3"], engine: "legacy" },
+];
+
+// FM-level operations: no backend, always available.
+const STRUCTURAL_OPERATIONS = OPERATIONS.filter((op) => !op.solvers);
+
+// Analysis operations supported by a given solver, with `backendAware` derived from
+// the capability table (a facade method takes a backend kwarg iff >1 backend has it).
+const operationsForSolver = (solver) =>
+  OPERATIONS.filter((op) => op.solvers?.includes(solver)).map((op) => ({
+    ...op,
+    backendAware: op.solvers.length > 1,
+  }));
+
+// Configuration-input operations — run from the configuration panel against the tree's
+// current selection (a {feature: value} mapping). A `method` entry runs that mapping
+// through the facade; a `value` entry drives a UI-only flow (wizard, download).
+const CONFIG_OPERATIONS = [
+  { label: "Valid configuration", method: "satisfiable_configuration" },
+  { label: "Filter", method: "filter" },
+  { label: "Commonality", method: "commonality" },
+  { label: "Diagnosis", method: "diagnosis" },
+  { label: "Conflict", method: "conflict" },
+  { label: "Interactive Configuration", value: "configurator" },
+  { label: "Download Configurator", value: "downloadConfigurator" },
+];
 
 const EXPORT_OPERATIONS = [
   { label: "AFM", value: "afm" },
@@ -59,19 +125,29 @@ const EXPORT_OPERATIONS = [
   { label: "Download UVL", value: "uvl" },
 ];
 
-function EditorPage({ selectedFile, setNavControls, darkMode }) {
+// Collaboration endpoint when VITE_COLLAB_URL is not set: derive it from the page's
+// own origin so the all-in-one Docker image (nginx proxies /collab to the bundled
+// collab server) works on localhost or any domain without a rebuild. Falls back to
+// the local dev server when there is no window (e.g. tests).
+function defaultCollabEndpoint() {
+  if (typeof window === "undefined") return "ws://localhost:1234";
+  const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+  return `${proto}//${window.location.host}/collab`;
+}
+
+function EditorPage({ selectedFile, darkMode, toggleDark }) {
   const location = useLocation();
   const navigate = useNavigate();
   const searchParams = new URLSearchParams(location.search);
   const docIdFromQuery = searchParams.get("doc");
   const collabFeatureAvailable = import.meta.env.VITE_ENABLE_COLLAB === "true";
   const collabEnabled = collabFeatureAvailable && !!docIdFromQuery;
-  const collabEndpoint = import.meta.env.VITE_COLLAB_URL || "ws://localhost:1234";
+  const collabEndpoint = import.meta.env.VITE_COLLAB_URL || defaultCollabEndpoint();
   const collabConfig = collabEnabled
     ? { enabled: true, docId: docIdFromQuery, endpoint: collabEndpoint }
     : { enabled: false };
 
-  const { isLoaded, pluginsConfig, call, restart } = useWorkerClient();
+  const { isLoaded, pluginsConfig, call, interrupt, restart } = useWorkerClient();
 
   const [isRunning, setIsRunning] = useState(false);
   const [isImported, setIsImported] = useState(true);
@@ -87,17 +163,26 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
   const [uvlhubMessage, setUvlhubMessage] = useState("");
   const [collabStatus, setCollabStatus] = useState("");
   const [initialContent, setInitialContent] = useState("");
+  // Model metrics (right panel) — fetched separately from validation because
+  // some metrics are full analyses and must not run on every (debounced) keystroke.
+  const [modelInfo, setModelInfo] = useState(null);
   const [featureTree, setFeatureTree] = useState(null);
   const [currentView, setCurrentView] = useState("source");
   const [constraints, setConstraints] = useState(null);
   const [history, setHistory] = useState(null);
   const [showConfiguratorPanel, setShowConfiguratorPanel] = useState(true);
+  const [modelInfoOpen, setModelInfoOpen] = useState(true);
+  const [panelTab, setPanelTab] = useState("output");
 
   // Plugin config synced from worker on load
-  const [enabledPlugins, setEnabledPlugins] = useState({ sat: true, bdd: true, z3: false });
+  const [enabledPlugins, setEnabledPlugins] = useState({ sat: true, bdd: true, z3: true });
+
+  // Operation-argument modal state ({ action, options } while open, else null)
+  const [inputModal, setInputModal] = useState(null);
 
   // Z3 attribute optimization modal state
   const [isAttrOptModalOpen, setIsAttrOptModalOpen] = useState(false);
+  const [attrOptBackend, setAttrOptBackend] = useState("z3");
   const [numericalAttributes, setNumericalAttributes] = useState(null);
   const [optimizationGoals, setOptimizationGoals] = useState({});
 
@@ -112,7 +197,20 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
   const [ffmData, setFfmData] = useState(null);
 
   const [selectedSolver, setSelectedSolver] = useState("sat");
+  // Compute backend: in-browser WASM (default) or a remote flamapy-rest API.
+  const [computeBackend, setComputeBackend] = useState(loadBackend);
+  const [restApiUrl, setRestApiUrl] = useState(loadRestUrl);
+  const [isBackendModalOpen, setIsBackendModalOpen] = useState(false);
   const editorRef = useRef(null);
+  // The exact editor content the current `validation` state refers to; lets
+  // ensureValidated() skip revalidation only when nothing changed since.
+  const lastValidatedCodeRef = useRef(null);
+
+  const selectBackend = useCallback((backend) => {
+    setComputeBackend(backend);
+    saveBackend(backend);
+    if (backend === REST) setIsBackendModalOpen(true);
+  }, []);
 
   // Sync enabled plugins from worker config
   useEffect(() => {
@@ -270,31 +368,58 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
     }
     return call("validateModel", code)
       .then((result) => {
+        lastValidatedCodeRef.current = code;
         setValidation(result);
+        setModelInfo(null); // metrics refer to the previous model — refetch on demand
         setConstraints(getConstraints(code));
         return result;
       })
-      .catch(() => {
+      .catch((error) => {
         setOutput({
           label: "Validation error",
-          result: "An exception occurred validating the model. Try restarting Flamapy.",
+          result: `An exception occurred validating the model: ${error.message}. Try restarting Flamapy.`,
         });
         return null;
       });
   }
 
+  // Operations must run against the code currently in the editor: reuse the
+  // last validation only if the content hasn't changed since (typing-triggered
+  // validation is debounced, so `validation` alone can be stale).
+  async function ensureValidated() {
+    if (validation && editorRef.current?.getValue() === lastValidatedCodeRef.current) {
+      return validation;
+    }
+    return await validateModel();
+  }
+
+  // The right panel's Validate button also computes the model metrics, which
+  // are deliberately excluded from per-keystroke validation (they include full
+  // analyses such as core features and atomic sets).
+  async function handleValidateClick() {
+    const result = await validateModel();
+    if (result?.valid) {
+      try {
+        setModelInfo(await call("getModelInformation"));
+      } catch (error) {
+        setOutput({ label: "Model information", result: error.message });
+      }
+    }
+  }
+
   async function executeAction(action) {
     if (!isLoaded) return;
-    const currentValidation = validation ?? await validateModel();
+    const currentValidation = await ensureValidated();
     if (!currentValidation?.valid) {
       setOutput({ label: action.label, result: "Error: the model is not valid. Fix syntax errors and retry." });
       return;
     }
 
-    if (action.value === "Z3AttributeOptimization") {
+    if (action.engine === "legacy" && action.value === "AttributeOptimization") {
       try {
         const attrs = await call("getNumericalAttributes");
         setNumericalAttributes(attrs);
+        setAttrOptBackend(action.backendAware ? selectedSolver : "z3");
         setIsAttrOptModalOpen(true);
       } catch (error) {
         setOutput({ label: "Attribute extraction error", result: error.message });
@@ -302,45 +427,103 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
       return;
     }
 
-    // if (action.value === "ffm") {
-    //   try {
-    //     const attrs = await call("getNumericalAttributes");
-    //     setNumericalAttributesSelection(attrs);
-    //     setIsAttrSelectionModalOpen(true);
-    //   } catch (error) {
-    //     setOutput({ label: "Attribute extraction error", result: error.message });
-    //   }
-    //   return;
-    // }
+    if (action.input) {
+      // Operation needs an extra argument: collect it via a modal, then run.
+      let options = [];
+      if (action.input.kind === "feature") {
+        try {
+          options = await call("getFeatures");
+        } catch (error) {
+          setOutput({ label: action.label, result: error.message });
+          return;
+        }
+      }
+      setInputModal({ action, options });
+      return;
+    }
 
+    runOperation(action);
+  }
+
+  async function runOperation(action) {
     setIsRunning(true);
     setOutput({ label: action.label, result: "Executing operation" });
     try {
-      const result = await call("executeAction", action);
-      result.result = JSON.parse(result.result);
-      setOutput(result);
-    } catch {
-      setOutput({ label: action.label, result: "An exception occurred. Check the model definition." });
+      // Forward the selected solver only to backend-aware operations, merged with any
+      // argument already collected for the operation.
+      const args = action.backendAware
+        ? { ...(action.args || {}), backend: selectedSolver }
+        : action.args || {};
+      let result;
+      if (computeBackend === REST) {
+        result = await executeRestOperation({
+          baseUrl: restApiUrl,
+          method: action.method,
+          modelText: editorRef.current.getValue(),
+          args,
+        });
+      } else {
+        const data = action.backendAware ? { ...action, args } : action;
+        result = JSON.parse((await call("executeFacadeOperation", data)).result);
+      }
+      setOutput({ label: action.label, result });
+    } catch (error) {
+      setOutput({ label: action.label, result: describeError(error) });
     }
     setIsRunning(false);
   }
 
+  // Turn a worker/REST failure into a message the user can act on. The worker
+  // forwards the real Python error; an interrupt surfaces as KeyboardInterrupt.
+  function describeError(error) {
+    const message = error?.message || "";
+    if (message.includes("KeyboardInterrupt")) {
+      return "Operation interrupted.";
+    }
+    if (computeBackend === REST) {
+      return `Remote API error: ${message}`;
+    }
+    return message
+      ? `Error: ${message}`
+      : "An exception occurred. Check the model definition.";
+  }
+
+  function confirmInputOperation(value) {
+    const { action } = inputModal;
+    setInputModal(null);
+    runOperation({ ...action, args: { ...(action.args || {}), [action.input.arg]: value } });
+  }
+
   async function executeActionWithConf(action, configuration) {
     if (!isLoaded) return;
-    const currentValidation = validation ?? await validateModel();
+    const currentValidation = await ensureValidated();
     if (!currentValidation?.valid) {
       setOutput({ label: action.label, result: "Error: the model is not valid. Fix syntax errors and retry." });
       return;
     }
 
-    if (action.isOperationWithConf) {
+    if (action.method) {
       setIsRunning(true);
       setOutput({ label: action.label, result: "Executing operation" });
       try {
-        const result = await call("executeActionWithConf", { action, configuration });
-        setOutput(result);
-      } catch {
-        setOutput({ label: action.label, result: "An exception occurred. Check the model definition." });
+        let result;
+        if (computeBackend === REST) {
+          result = await executeRestOperationWithConfig({
+            baseUrl: restApiUrl,
+            method: action.method,
+            modelText: editorRef.current.getValue(),
+            configMapping: configuration,
+            args: action.args || {},
+          });
+        } else {
+          const configs = { configuration_path: configuration };
+          result = JSON.parse(
+            (await call("executeFacadeOperationWithConfig", { action, configs })).result
+          );
+        }
+        setOutput({ label: action.label, result });
+      } catch (error) {
+        setOutput({ label: action.label, result: describeError(error) });
       }
       setIsRunning(false);
     } else if (action.value === "configurator") {
@@ -357,18 +540,25 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
         saveAs(await zip.generateAsync({ type: "blob" }), "configurator.zip");
       } catch (err) {
         console.error("Error processing ZIP:", err);
-        alert("Failed to generate ZIP.");
+        setOutput({ label: "Download Configurator", result: `Failed to generate the configurator ZIP: ${err.message}` });
       }
     }
   }
 
   function interruptExecution() {
-    if (isLoaded) {
-      restart();
-      setIsRunning(false);
-      setValidation(null);
-      setOutput({ label: "Execution interrupted", result: "Re-starting Flamapy..." });
+    if (!isLoaded) return;
+    // Fast path: raise KeyboardInterrupt inside the running Python operation
+    // (needs cross-origin isolation). The pending call rejects and is shown as
+    // "Operation interrupted." — Flamapy itself stays loaded.
+    if (interrupt()) {
+      setOutput({ label: "Execution interrupted", result: "Stopping the running operation…" });
+      return;
     }
+    // Fallback (no SharedArrayBuffer): tear down and reload the whole runtime.
+    restart();
+    setIsRunning(false);
+    setValidation(null);
+    setOutput({ label: "Execution interrupted", result: "Re-starting Flamapy..." });
   }
 
   async function downloadFile(action) {
@@ -383,7 +573,7 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
 
   async function toggleView(option) {
     if (!isLoaded) return;
-    const currentValidation = validation ?? await validateModel();
+    const currentValidation = await ensureValidated();
     if (!currentValidation?.valid) {
       const messages = {
         graph: "The model is not valid. Fix syntax errors before visualizing.",
@@ -450,8 +640,12 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
     setCurrentView(option.value);
   }
 
+  // Browsers and intermediaries start rejecting URLs in the low tens of KB;
+  // stay safely below that when embedding the whole model in a link.
+  const MAX_SHARE_URL_LENGTH = 8000;
+
   async function handleSaveToUVLHub() {
-    const currentValidation = validation ?? await validateModel();
+    const currentValidation = await ensureValidated();
     if (!currentValidation?.valid) {
       setUvlhubMessage("Model must be valid");
       setTimeout(() => setUvlhubMessage(""), 2000);
@@ -459,6 +653,11 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
     }
     const code = editorRef.current?.getValue() || "";
     const encoded = btoa(unescape(encodeURIComponent(code)));
+    if (encoded.length > MAX_SHARE_URL_LENGTH) {
+      setUvlhubMessage("Model too large to send as a link");
+      setTimeout(() => setUvlhubMessage(""), 3000);
+      return;
+    }
     const rawEndpoint = new URL("/raw/model.uvl", window.location.href);
     rawEndpoint.searchParams.set("model", encoded);
     const uvlhubBase = import.meta.env.VITE_UVLHUB_URL || "https://www.uvlhub.io";
@@ -470,6 +669,11 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
   async function handleCopyModelLink() {
     const code = editorRef.current?.getValue() || "";
     const encoded = btoa(unescape(encodeURIComponent(code)));
+    if (encoded.length > MAX_SHARE_URL_LENGTH) {
+      setShareMessage("Model too large to share as a link");
+      setTimeout(() => setShareMessage(""), 3000);
+      return;
+    }
     const url = new URL("/editor", window.location.href);
     url.searchParams.set("model", encoded);
     try {
@@ -504,7 +708,9 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
       const wsUrl = new URL(collabEndpoint);
       const healthUrl = new URL(wsUrl);
       healthUrl.protocol = wsUrl.protocol === "wss:" ? "https:" : "http:";
-      healthUrl.pathname = "/health";
+      // Append /health to the endpoint path so it works for both a same-origin
+      // proxied endpoint (…/collab -> …/collab/health) and a bare host:port one.
+      healthUrl.pathname = `${wsUrl.pathname.replace(/\/+$/, "")}/health`;
       const res = await fetch(healthUrl.toString(), { mode: "cors" });
       return res.ok;
     } catch {
@@ -555,12 +761,12 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
     setIsRunning(true);
     setOutput({ label: "Attribute Optimization", result: "Executing operation" });
     setCurrentView("paretofront");
-    call("executeAttributeOptimization", selectedGoals)
+    call("executeAttributeOptimization", { goals: selectedGoals, backend: attrOptBackend })
       .then((result) => {
         setOutput({ label: result.label, result: result.result.results_str });
         setParetoFrontData(result.result);
       })
-      .catch(() => setOutput({ label: "Attribute Optimization", result: "An exception occurred. Check the model definition." }))
+      .catch((error) => setOutput({ label: "Attribute Optimization", result: describeError(error) }))
       .finally(() => setIsRunning(false));
     closeAttrOptModal();
   }
@@ -584,392 +790,192 @@ function EditorPage({ selectedFile, setNavControls, darkMode }) {
         setOutput(result);
         setFfmData(result);
       })
-      .catch(() => setOutput({ label: "Feature Flow Map", result: "An exception occurred. Check the model definition." }))
+      .catch((error) => setOutput({ label: "Feature Flow Map", result: describeError(error) }))
       .finally(() => setIsRunning(false));
     closeAttrSelectionModal();
   }
 
-  // Navbar toolbar (injected via setNavControls)
-  const toolbarContent = useMemo(() => {
-    return (
-      <div className="w-full flex justify-center">
-        <div className="flex items-end gap-3 flex-nowrap overflow-x-auto overflow-visible px-3 py-1 bg-white/80 dark:bg-gray-800/90 rounded shadow-sm">
-
-          <div className="flex flex-col gap-1 whitespace-nowrap">
-            <span className="text-[11px] text-gray-600 dark:text-gray-300 text-center w-full">View</span>
-            <div className="h-px bg-gray-300 dark:bg-gray-600 w-full" />
-            <div className="flex items-stretch rounded overflow-hidden border border-gray-300 dark:border-gray-600">
-              {viewOptions.map((option) => (
-                <button
-                  key={option.value}
-                  className={`px-2.5 py-2 text-sm ${
-                    currentView === option.value ? "bg-[#356C99] text-white" : "bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200"
-                  }`}
-                  onClick={() => toggleView(option)}
-                >
-                  {option.label}
-                </button>
-              ))}
-              {metricsOptions.length > 0 && (
-                <DropdownMenu
-                  buttonLabel="Metrics"
-                  options={metricsOptions}
-                  executeAction={toggleView}
-                  className="bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 py-2 px-3 rounded-none shadow-none w-[100px] justify-between border-l border-gray-300 dark:border-gray-600"
-                />
-              )}
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-1 whitespace-nowrap">
-            <span className="text-[11px] text-gray-600 dark:text-gray-300 text-center w-full">Automated analysis</span>
-            <div className="h-px bg-gray-300 dark:bg-gray-600 w-full" />
-            <div className="flex items-stretch rounded overflow-hidden border border-gray-300 dark:border-gray-600">
-              {solverOptions.map((option) => (
-                <button
-                  key={option.value}
-                  className={`px-2.5 py-2 text-sm min-w-[60px] ${
-                    selectedSolver === option.value ? "bg-[#356C99] text-white" : "bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200"
-                  }`}
-                  onClick={() => setSelectedSolver(option.value)}
-                >
-                  {option.label}
-                </button>
-              ))}
-              <DropdownMenu
-                buttonLabel="Analysis operation"
-                options={ALL_SOLVER_OPERATIONS[selectedSolver] ?? []}
-                executeAction={executeAction}
-                className="bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 py-2 px-3 rounded-none shadow-none w-[170px] justify-between border-l"
-              />
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-1 whitespace-nowrap">
-            <span className="text-[11px] text-gray-600 dark:text-gray-300 text-center w-full">Export</span>
-            <div className="h-px bg-gray-300 dark:bg-gray-600 w-full" />
-            <div className="flex rounded overflow-hidden border border-gray-300">
-              <DropdownMenu
-                buttonLabel="Export"
-                options={EXPORT_OPERATIONS}
-                executeAction={downloadFile}
-                className="bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 py-2 px-3 rounded-none shadow-none w-[120px] justify-between"
-              />
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-1 whitespace-nowrap">
-            <span className="text-[11px] text-gray-600 dark:text-gray-300 text-center w-full">Share</span>
-            <div className="h-px bg-gray-300 dark:bg-gray-600 w-full" />
-            <div className="flex items-end gap-1">
-              <div className="flex rounded overflow-hidden border border-gray-300 dark:border-gray-600">
-                <button
-                  className="py-2 px-3 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600"
-                  onClick={handleCopyModelLink}
-                >
-                  Copy model link
-                </button>
-              </div>
-              {shareMessage && <span className="text-xs text-gray-600 dark:text-gray-300">{shareMessage}</span>}
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-1 whitespace-nowrap">
-            <span className="text-[11px] text-gray-600 dark:text-gray-300 text-center w-full">UVLHub</span>
-            <div className="h-px bg-gray-300 dark:bg-gray-600 w-full" />
-            <div className="flex items-end gap-1">
-              <div className="flex rounded overflow-hidden border border-gray-300 dark:border-gray-600">
-                <button
-                  className="py-2 px-3 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600"
-                  onClick={handleSaveToUVLHub}
-                >
-                  Save to UVLHub
-                </button>
-              </div>
-              {uvlhubMessage && <span className="text-xs text-gray-600 dark:text-gray-300">{uvlhubMessage}</span>}
-            </div>
-          </div>
-
-          {collabEnabled && (
-            <div className="flex flex-col gap-1 whitespace-nowrap">
-              <span className="text-[11px] text-gray-600 dark:text-gray-300 text-center w-full">Collaborate</span>
-              <div className="h-px bg-gray-300 dark:bg-gray-600 w-full" />
-              <div className="flex items-end gap-1">
-                <div className="flex rounded overflow-hidden border border-gray-300 dark:border-gray-600">
-                  <button
-                    className="py-2 px-3 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600"
-                    onClick={handleCopySessionLink}
-                  >
-                    Copy link
-                  </button>
-                </div>
-                {copyMessage && <span className="text-xs text-gray-600 dark:text-gray-300">{copyMessage}</span>}
-              </div>
-            </div>
-          )}
-          {!collabEnabled && collabFeatureAvailable && (
-            <div className="flex flex-col gap-1 whitespace-nowrap">
-              <span className="text-[11px] text-gray-600 dark:text-gray-300 text-center w-full">Collaborate</span>
-              <div className="h-px bg-gray-300 dark:bg-gray-600 w-full" />
-              <div className="flex items-end gap-1">
-                <div className="flex rounded overflow-hidden border border-gray-300 dark:border-gray-600">
-                  <button
-                    className="py-2 px-3 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600"
-                    onClick={handleStartCollab}
-                  >
-                    Collaborate
-                  </button>
-                </div>
-                {collabStatus && <span className="text-xs text-gray-600 dark:text-gray-300">{collabStatus}</span>}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [collabEnabled, collabFeatureAvailable, collabStatus, copyMessage, currentView, metricsOptions, selectedSolver, shareMessage, uvlhubMessage, solverOptions, viewOptions]);
-
-  useEffect(() => {
-    if (setNavControls) {
-      setNavControls(toolbarContent);
-      return () => setNavControls(null);
+  // VSCode-style editor tabs: base views + metrics, plus a dynamic tab for the
+  // configurator / pareto-front views while they are the active view.
+  const editorTabs = useMemo(() => {
+    const tabs = [...viewOptions, ...metricsOptions];
+    const dynamic = { configurator: "Configurator", paretofront: "Pareto Front" };
+    if (dynamic[currentView] && !tabs.some((t) => t.value === currentView)) {
+      tabs.push({ label: dynamic[currentView], value: currentView });
     }
-  }, [setNavControls, toolbarContent]);
+    return tabs;
+  }, [viewOptions, metricsOptions, currentView]);
+
+  // Status-bar backend control toggles between in-browser WASM and the remote API
+  // (selectBackend opens the settings modal when switching to REST).
+  const toggleComputeBackend = useCallback(
+    () => selectBackend(computeBackend === WASM ? REST : WASM),
+    [computeBackend, selectBackend]
+  );
 
   return (
-    <div className="flex-1 overflow-hidden flex flex-col">
-      <div className="flex flex-row flex-grow p-2 gap-2 overflow-hidden relative items-stretch">
+    <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-surface dark:bg-gray-950 text-gray-900 dark:text-gray-100">
+      <TitleBar darkMode={darkMode} toggleDark={toggleDark} />
+
+      <ActionToolbar
+        structuralOptions={STRUCTURAL_OPERATIONS}
+        executeAction={executeAction}
+        solverOptions={solverOptions}
+        selectedSolver={selectedSolver}
+        setSelectedSolver={setSelectedSolver}
+        analysisOptions={operationsForSolver(selectedSolver)}
+        exportOptions={EXPORT_OPERATIONS}
+        downloadFile={downloadFile}
+        onShareLink={handleCopyModelLink}
+        shareMessage={shareMessage}
+        onUvlhub={handleSaveToUVLHub}
+        uvlhubMessage={uvlhubMessage}
+        collab={{
+          enabled: collabEnabled,
+          available: collabFeatureAvailable,
+          onCopySession: handleCopySessionLink,
+          copyMessage,
+          onStart: handleStartCollab,
+          status: collabStatus,
+        }}
+      />
+
+      <div className="flex flex-1 overflow-hidden">
+        <ActivityBar
+          sidebarOpen={showConfiguratorPanel}
+          onToggleSidebar={() => setShowConfiguratorPanel((o) => !o)}
+          modelInfoOpen={modelInfoOpen}
+          onToggleModelInfo={() => setModelInfoOpen((o) => !o)}
+          onOpenBackend={() => setIsBackendModalOpen(true)}
+        />
 
         {showConfiguratorPanel && (
-          <div className="relative h-full">
-            <TreeView treeData={featureTree} executeAction={executeActionWithConf} history={history} />
-            {currentView !== "configurator" && (
-              <button
-                className="absolute right-[-12px] top-1/2 -translate-y-1/2 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 text-[10px] px-1 py-10 rounded-r shadow hover:bg-gray-400 dark:hover:bg-gray-500 rotate-180 [writing-mode:vertical-rl]"
-                onClick={() => setShowConfiguratorPanel(false)}
-              >
-                Hide configuration panel
-              </button>
+          <TreeView
+            treeData={featureTree}
+            executeAction={executeActionWithConf}
+            operations={CONFIG_OPERATIONS}
+            history={history}
+          />
+        )}
+
+        <div className="flex flex-1 flex-col overflow-hidden">
+          <EditorTabs tabs={editorTabs} currentView={currentView} onSelect={toggleView} />
+
+          <div className="flex flex-1 flex-col overflow-hidden relative">
+            <UVLEditor
+              editorRef={editorRef}
+              validateModel={validateModel}
+              defaultCode={initialContent}
+              hide={currentView !== "source"}
+              collabConfig={collabConfig}
+              onEditorMount={() => setIsEditorReady(true)}
+              darkMode={darkMode}
+            />
+            {currentView === "graph" && (
+              <FeatureModelVisualization treeData={featureTree} constraints={constraints} />
+            )}
+            {currentView === "configdist" && (
+              <div className="flex-1 overflow-auto">
+                <ErrorBoundary>
+                  <ProductDistributionChart data={configDistData} />
+                </ErrorBoundary>
+              </div>
+            )}
+            {currentView === "fip" && (
+              <div className="flex-1 overflow-auto">
+                <ErrorBoundary>
+                  <FeatureInclusionProbabilitiesChart data={fipData} />
+                </ErrorBoundary>
+              </div>
+            )}
+            {currentView === "ffm" && (
+              <div className="flex-1 overflow-auto">
+                <ErrorBoundary>
+                  <FeatureFlowMap data={ffmData} />
+                </ErrorBoundary>
+              </div>
+            )}
+            {currentView === "paretofront" && (
+              <div className="flex-1 overflow-auto">
+                <ErrorBoundary>
+                  <ParetoFrontChart data={paretoFrontData} />
+                </ErrorBoundary>
+              </div>
+            )}
+            {currentView === "configurator" && (
+              <Wizard call={call} setHistory={setHistory} />
             )}
           </div>
-        )}
-        {!showConfiguratorPanel && currentView !== "configurator" && (
-          <button
-            className="absolute left-0 top-1/2 -translate-y-1/2 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 text-[10px] px-1 py-10 rounded-r shadow hover:bg-gray-400 dark:hover:bg-gray-500 z-40 rotate-180 [writing-mode:vertical-rl]"
-            onClick={() => setShowConfiguratorPanel(true)}
-          >
-            Show configuration panel
-          </button>
-        )}
 
-        <div className="flex flex-1 flex-col">
-          <UVLEditor
-            editorRef={editorRef}
-            validateModel={validateModel}
-            defaultCode={initialContent}
-            hide={currentView !== "source"}
-            collabConfig={collabConfig}
-            onEditorMount={() => setIsEditorReady(true)}
-            darkMode={darkMode}
-          />
-          {currentView === "graph" && (
-            <FeatureModelVisualization treeData={featureTree} constraints={constraints} />
-          )}
-          {currentView === "configdist" && (
-            <div className="flex-1 overflow-auto">
-              <ErrorBoundary>
-                <ProductDistributionChart data={configDistData} />
-              </ErrorBoundary>
-            </div>
-          )}
-          {currentView === "fip" && (
-            <div className="flex-1 overflow-auto">
-              <ErrorBoundary>
-                <FeatureInclusionProbabilitiesChart data={fipData} />
-              </ErrorBoundary>
-            </div>
-          )}
-          {currentView === "ffm" && (
-            <div className="flex-1 overflow-auto">
-              <ErrorBoundary>
-                <FeatureFlowMap data={ffmData} />
-              </ErrorBoundary>
-            </div>
-          )}
-          {currentView === "paretofront" && (
-            <div className="flex-1 overflow-auto">
-              <ErrorBoundary>
-                <ParetoFrontChart data={paretoFrontData} />
-              </ErrorBoundary>
-            </div>
-          )}
-          {currentView === "configurator" && (
-            <Wizzard call={call} setHistory={setHistory} />
-          )}
-
-          <ExecutionOutput
+          <BottomPanel
+            panelTab={panelTab}
+            setPanelTab={setPanelTab}
+            output={output}
+            validation={validation}
+            isAwaiting={isRunning || !isImported || !isLoaded}
             handleResize={handleResize}
             handleStop={interruptExecution}
-            isAwaiting={isRunning || !isImported || !isLoaded}
-          >
-            {output}
-          </ExecutionOutput>
+          />
         </div>
 
-        <ModelInformation onValidateModel={validateModel} validation={validation} />
+        {modelInfoOpen && (
+          <ModelInformation
+            onValidateModel={handleValidateClick}
+            validation={validation}
+            modelInfo={modelInfo}
+          />
+        )}
       </div>
 
+      <StatusBar
+        isLoaded={isLoaded}
+        isAwaiting={isRunning || !isImported || !isLoaded}
+        validation={validation}
+        onShowProblems={() => setPanelTab("problems")}
+        computeBackend={computeBackend}
+        WASM={WASM}
+        onToggleBackend={toggleComputeBackend}
+        restApiUrl={restApiUrl}
+        selectedSolver={selectedSolver}
+      />
+
       {isAttrOptModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-75">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-3xl w-full mx-4 p-6">
-            <h3 className="text-xl font-bold mb-4 text-gray-800 dark:text-gray-200">Select Optimization Goals</h3>
-            <div className="max-h-96 overflow-y-auto border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 p-3 rounded">
-              {numericalAttributes && numericalAttributes.length > 0 ? (
-                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                  <thead className="bg-gray-100 dark:bg-gray-700 sticky top-0">
-                    <tr>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Optimize</th>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Attribute</th>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Goal</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                    {numericalAttributes.map((attribute) => {
-                      const isSelected = optimizationGoals[attribute]?.selected || false;
-                      const goal = optimizationGoals[attribute]?.goal || "Minimize";
-                      return (
-                        <tr key={attribute}>
-                          <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={(e) => handleAttributeSelection(attribute, e.target.checked)}
-                              className="h-4 w-4 text-blue-600 border-gray-300 rounded"
-                            />
-                          </td>
-                          <td className="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
-                            {attribute}
-                          </td>
-                          <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                            <select
-                              value={goal}
-                              disabled={!isSelected}
-                              onChange={(e) => handleGoalChange(attribute, e.target.value)}
-                              className={`mt-1 block w-full py-1 px-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm sm:text-sm ${
-                                !isSelected ? "bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400" : "bg-white dark:bg-gray-600 dark:text-gray-200"
-                              }`}
-                            >
-                              <option value="Minimize">Minimize</option>
-                              <option value="Maximize">Maximize</option>
-                            </select>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              ) : (
-                <p className="text-sm text-red-500">No numerical attributes available in this model.</p>
-              )}
-            </div>
-            <div className="mt-6 flex justify-end space-x-3">
-              <button
-                className="px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-800 dark:text-gray-200 font-semibold rounded-md hover:bg-gray-400 dark:hover:bg-gray-500"
-                onClick={closeAttrOptModal}
-              >
-                Cancel
-              </button>
-              <button
-                className="px-4 py-2 bg-green-600 text-white font-semibold rounded-md hover:bg-green-700"
-                onClick={executeOptimization}
-              >
-                Execute Optimization
-              </button>
-            </div>
-          </div>
-        </div>
+        <AttributeOptimizationModal
+          attributes={numericalAttributes}
+          goals={optimizationGoals}
+          onToggle={handleAttributeSelection}
+          onGoalChange={handleGoalChange}
+          onExecute={executeOptimization}
+          onCancel={closeAttrOptModal}
+        />
       )}
       {isAttrSelectionModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-75">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-3xl w-full mx-4 p-6">
-            <h3 className="text-xl font-bold mb-4 text-gray-800 dark:text-gray-200">
-              Select Attribute
-            </h3>
-
-            <div className="max-h-96 overflow-y-auto border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 p-3 rounded">
-              {numericalAttributesSelection && numericalAttributesSelection.length > 0 ? (
-                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                  
-                  {/* HEADER */}
-                  <thead className="bg-gray-100 dark:bg-gray-700 sticky top-0">
-                    <tr>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                        Select
-                      </th>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                        Attribute
-                      </th>
-                    </tr>
-                  </thead>
-
-                  {/* BODY (igual estructura, solo simplificado) */}
-                  <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                    {numericalAttributesSelection.map((attribute) => {
-                      const isSelected = selectedAttribute === attribute;
-
-                      return (
-                        <tr key={attribute}>
-                          <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
-                            <input
-                              type="radio"
-                              name="attribute"
-                              checked={isSelected}
-                              onChange={() => setSelectedAttribute(attribute)}
-                              className="h-4 w-4 text-blue-600 border-gray-300"
-                            />
-                          </td>
-
-                          <td className="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
-                            {attribute}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-
-                </table>
-              ) : (
-                <p className="text-sm text-red-500">
-                  No numerical attributes available in this model.
-                </p>
-              )}
-            </div>
-
-            {/* BOTONES */}
-            <div className="mt-6 flex justify-end space-x-3">
-              <button
-                className="px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-800 dark:text-gray-200 font-semibold rounded-md hover:bg-gray-400 dark:hover:bg-gray-500"
-                onClick={closeAttrSelectionModal}
-              >
-                Cancel
-              </button>
-
-              <button
-                className="px-4 py-2 bg-green-600 text-white font-semibold rounded-md hover:bg-green-700"
-                onClick={() => {
-                  if (!selectedAttribute) {
-                    alert("Please select an attribute");
-                    return;
-                  }
-                  executeFlowMap();
-                }}
-              >
-                Confirm
-              </button>
-            </div>
-          </div>
-        </div>
+        <AttributeSelectionModal
+          attributes={numericalAttributesSelection}
+          selected={selectedAttribute}
+          onSelect={setSelectedAttribute}
+          onConfirm={executeFlowMap}
+          onCancel={closeAttrSelectionModal}
+        />
+      )}
+      {inputModal && (
+        <OperationInputModal
+          action={inputModal.action}
+          options={inputModal.options}
+          onConfirm={confirmInputOperation}
+          onCancel={() => setInputModal(null)}
+        />
+      )}
+      {isBackendModalOpen && (
+        <BackendSettingsModal
+          url={restApiUrl}
+          onSave={(url) => {
+            setRestApiUrl(url);
+            saveRestUrl(url);
+            setIsBackendModalOpen(false);
+          }}
+          onCancel={() => setIsBackendModalOpen(false)}
+        />
       )}
     </div>
   );

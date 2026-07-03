@@ -1,0 +1,17 @@
+# The production image is self-contained: nginx serves the app and reverse-proxies
+# /collab to the Y.js collaboration backend running in the same container. So this
+# is just one service — `docker run -p 8080:80 flamapy/flamapy-ide` does the same.
+#
+#   docker compose up --build      # then open http://localhost:8080
+services:
+  flamapy-ide:
+    build:
+      context: .
+      target: prod
+      # args:
+      #   VITE_GA_MEASUREMENT_ID: ""        # enable Google Analytics
+      #   VITE_COLLAB_URL: "wss://collab.example.com"  # use an external collab server
+    image: flamapy/flamapy-ide
+    ports:
+      - "8080:80"
+    restart: unless-stopped

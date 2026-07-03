@@ -57,6 +57,22 @@ ${installStatements}
     return this.pluginsConfig;
   }
 
+  // Lets the main thread interrupt a running Python operation (SIGINT) via a
+  // SharedArrayBuffer; only available when the page is cross-origin isolated.
+  setInterruptBuffer(buffer) {
+    this.pyodide.setInterruptBuffer(buffer);
+  }
+
+  // All Python entry points are called with their inputs passed through
+  // pyodide.globals — never interpolated into the Python source — so values
+  // can't break out of (or inject into) the executed snippet.
+
+  requireValidModel() {
+    if (!this.isValid) {
+      throw new Error("The model is not valid. Validate it before running operations.");
+    }
+  }
+
   async validateModel(code) {
     this.pyodide.globals.set("code", code);
     const jsonResult = await this.pyodide.runPythonAsync(
@@ -72,31 +88,51 @@ process_uvl_file('uvlfile.uvl')
     return result;
   }
 
-  async executeAction(action) {
-    if (this.isValid) {
-      const result = await this.pyodide.runPythonAsync(
-        `execute_pysat_operation('${action.value}')`
-      );
-      if (result.toJs) {
-        return { label: action.label, result: result.toJs() };
-      } else {
-        return { label: action.label, result };
-      }
-    }
+  // Model metrics are requested separately from validation: some of them are
+  // full analyses (core features, atomic sets) and must not run per keystroke.
+  async getModelInformation() {
+    this.requireValidModel();
+    const jsonResult = await this.pyodide.runPythonAsync(
+      `get_model_information_json()`
+    );
+    return JSON.parse(jsonResult);
+  }
+
+  async executeFacadeOperation(action) {
+    this.requireValidModel();
+    this.pyodide.globals.set("facade_method", action.method);
+    this.pyodide.globals.set("facade_args", JSON.stringify(action.args || {}));
+    const result = await this.pyodide.runPythonAsync(
+      `execute_facade_operation(facade_method, facade_args)`
+    );
+    return { label: action.label, result };
+  }
+
+  async executeFacadeOperationWithConfig(data) {
+    this.requireValidModel();
+    const { action, configs } = data;
+    this.pyodide.globals.set("facade_method", action.method);
+    this.pyodide.globals.set("facade_args", JSON.stringify(action.args || {}));
+    this.pyodide.globals.set("facade_configs", JSON.stringify(configs || {}));
+    const result = await this.pyodide.runPythonAsync(
+      `execute_facade_operation_with_config(facade_method, facade_configs, facade_args)`
+    );
+    return { label: action.label, result };
   }
 
   async downloadFile(action) {
-    if (this.isValid) {
-      return await this.pyodide.runPythonAsync(
-        `execute_export_transformation('${action.value}')`
-      );
-    }
+    this.requireValidModel();
+    this.pyodide.globals.set("export_format", action.value);
+    return await this.pyodide.runPythonAsync(
+      `execute_export_transformation(export_format)`
+    );
   }
 
   async importModel(fileExtension, fileContent) {
+    this.pyodide.globals.set("file_extension", fileExtension);
     this.pyodide.globals.set("file_content", fileContent);
     return await this.pyodide.runPythonAsync(
-      `execute_import_transformation('${fileExtension}', file_content)`
+      `execute_import_transformation(file_extension, file_content)`
     );
   }
 
@@ -108,7 +144,8 @@ process_uvl_file('uvlfile.uvl')
   }
 
   async getFeatures() {
-    return await this.pyodide.runPythonAsync(`get_features()`);
+    const result = await this.pyodide.runPythonAsync(`json.dumps(get_features())`);
+    return JSON.parse(result);
   }
 
   async getNumericalAttributes() {
@@ -123,33 +160,21 @@ process_uvl_file('uvlfile.uvl')
     return await this.pyodide.runPythonAsync(`get_feature_inclusion_probabilities()`);
   }
 
-  async getFeatureFlowMap(data) {
-    return await this.pyodide.runPythonAsync(`get_feature_flow_map(${JSON.stringify(data)})`);
-  }
-
-  async executeActionWithConf(data) {
-    if (this.isValid) {
-      this.pyodide.globals.set("configuration", data.configuration);
-      const result = await this.pyodide.runPythonAsync(
-        `execute_configurator_operation('${data.action.value}', configuration.to_py())`
-      );
-      if (result.toJs) {
-        return { label: data.action.label, result: result.toJs() };
-      } else {
-        return { label: data.action.label, result };
-      }
-    }
+  async getFeatureFlowMap(attributeName) {
+    this.pyodide.globals.set("ffm_attribute", attributeName);
+    return await this.pyodide.runPythonAsync(`get_feature_flow_map(ffm_attribute)`);
   }
 
   async executeAttributeOptimization(data) {
-    if (this.isValid) {
-      const jsonResult = await this.pyodide.runPythonAsync(
-        `execute_attribute_optimization(${JSON.stringify(data)})`
-      );
-      const goals = data.map((item) => `${item.goal} ${item.attribute}`).join(", ");
-      const response = { label: `Optimum Configurations (Goals: ${goals})`, result: JSON.parse(jsonResult) };
-      return response;
-    }
+    this.requireValidModel();
+    this.pyodide.globals.set("attr_goals_json", JSON.stringify(data.goals));
+    this.pyodide.globals.set("attr_backend", data.backend || "z3");
+    const jsonResult = await this.pyodide.runPythonAsync(
+      `execute_attribute_optimization(json.loads(attr_goals_json), attr_backend)`
+    );
+    const goals = data.goals.map((item) => `${item.goal} ${item.attribute}`).join(", ");
+    const response = { label: `Optimum Configurations (Goals: ${goals})`, result: JSON.parse(jsonResult) };
+    return response;
   }
 
   async startConfigurator() {

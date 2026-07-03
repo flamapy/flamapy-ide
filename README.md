@@ -2,21 +2,47 @@
 
 _A browser-based Integrated Development Environment for Feature Models, powered by Flamapy on WebAssembly_
 
+> **Try it now at [ide.flamapy.org](https://ide.flamapy.org) — nothing to install.**
+
 ## Introduction
 
 FlamapyIDE is a web application for editing, visualizing, and performing Automated Analysis of Feature Models defined in UVL (Universal Variability Language). All computation runs directly in your browser via Pyodide (Python on WebAssembly) — no backend server or local installation of analysis tools required.
+
+## Contents
+
+- [Quick start](#quick-start)
+- [Features](#features)
+- [Using FlamapyIDE](#using-flamapyide)
+- [Deployment](#deployment)
+- [Development](#development)
+
+---
+
+## Quick start
+
+| I want to… | Do this |
+|------------|---------|
+| **Just use it** | Open **[ide.flamapy.org](https://ide.flamapy.org)** in any modern browser |
+| **Self-host it** | `docker run --rm -p 8080:80 flamapy/flamapy-ide`, then open http://localhost:8080 |
+| **Hack on it** | See [Development](#development) (`npm install && npm run dev`) |
+
+---
 
 ## Features
 
 - **UVL editor** with syntax highlighting and real-time validation
 - **Graphical visualization** of the feature model tree and constraints
-- **Automated analysis** via SAT and BDD solvers:
-  - Satisfiability, configurations, dead features, false-optional features, diagnosis, and more
-- **Metrics views**: configuration distribution chart and feature inclusion probability chart
+- **Structural operations** (no solver needed): metrics, atomic sets, variation points, leaf features, max depth, estimated configurations, and more
+- **Automated analysis** via SAT, BDD, and Z3 solvers:
+  - Satisfiability, configurations, dead/core/false-optional features, sampling, backbone, diagnosis, and more — the IDE only lists the operations each enabled solver supports
+- **Attribute optimization** (Z3): minimize/maximize numerical feature attributes
+- **Configuration-driven operations**: valid configuration, filter, commonality, diagnosis, and conflict, run against the configurator's current selection
+- **Metrics views**: configuration distribution chart, feature inclusion probability chart, and a feature flow map of attribute values
 - **Guided configurator**: step-by-step product configuration with validity checking
+- **Pluggable compute backend**: run analysis in-browser (default) or offload it to a remote [flamapy-rest](https://github.com/flamapy/flamapy_rest) API (configurable URL, default `rest.flamapy.org`)
 - **Import** feature models from Glencoe (`.gfm.json`), FeatureIDE (`.fide`/`.xml`), AFM (`.afm`), and JSON formats — converted to UVL automatically
 - **Export** to UVL, AFM, Glencoe, FeatureIDE, SPLOT, and JSON
-- **Real-time collaboration** (optional, requires a backend server)
+- **Real-time collaboration** (built into the Docker image; see [Collaboration backend](#collaboration-backend))
 
 ---
 
@@ -89,44 +115,72 @@ Use the **View** section in the toolbar to switch between:
 | **Graph** | Graphical tree of features and constraints |
 | **Metrics > Config. Distribution** | Line chart showing how configurations distribute over feature counts, with descriptive statistics |
 | **Metrics > Feature Prob.** | Bar chart of feature inclusion probabilities (dead, optional, and core features highlighted) |
+| **Metrics > Feature Flow Map** | Tree map of a chosen numerical attribute's value across the feature hierarchy |
 
-> Metrics views require the BDD plugin to be enabled and a valid model to be loaded.
+> The Config. Distribution and Feature Prob. views require the BDD plugin to be enabled and a valid model to be loaded.
 
 ---
 
 ### Running analysis operations
 
-1. Select a solver in the **Automated analysis** section of the toolbar: **SAT** or **BDD**.
-2. Open the **Analysis operation** dropdown and pick an operation.
-3. The result appears in the **Output** panel at the bottom.
+Operations are grouped by what they need. Results appear in the **Output** panel at the bottom.
 
-**SAT operations**
+**Structural operations** require no solver — they come from the always-present feature-model plugin:
 
 | Operation | Description |
 |-----------|-------------|
-| Satisfiable | Is there at least one valid configuration? |
-| Configurations | List all valid configurations |
-| Number of configurations | Count of valid configurations |
-| Dead features | Features that appear in no valid configuration |
-| False optional features | Optional features that are always selected |
-| Diagnosis | Identify conflicting constraints |
+| Metrics | Aggregate structural metrics of the model |
+| Atomic sets | Groups of features that are always selected together |
+| Variation points | Features that introduce variability |
+| Leaf features / Leaf count | Features with no children, and their count |
+| Average branching factor | Mean number of children per feature |
+| Max depth | Depth of the deepest feature |
+| Estimated configurations | Upper-bound estimate of the configuration space |
+| Feature ancestors | Ancestors of a chosen feature |
 
-**BDD operations**
+**Solver operations** — pick a solver (**SAT**, **BDD**, or **Z3**, whichever are enabled) and an operation. The dropdown only lists operations the selected solver actually supports; when more than one solver implements an operation, the chosen solver is used as the backend.
 
-| Operation | Description |
-|-----------|-------------|
-| Satisfiable | Is there at least one valid configuration? |
-| Configurations | List all valid configurations |
-| Number of configurations | Count of valid configurations |
-| Dead features | Features that appear in no valid configuration |
-| Configuration distribution | Number of configurations per feature count |
-| Feature inclusion probability | Probability of each feature appearing in a valid configuration |
-| Unique features | Features that appear in exactly one configuration |
-| Homogeneity | Degree to which configurations resemble each other |
-| Variability | Ratio of valid configurations to total possible configurations |
-| Variant features | Features that are neither dead nor core |
+| Operation | Solvers | Description |
+|-----------|---------|-------------|
+| Satisfiable | SAT, BDD, Z3 | Is there at least one valid configuration? |
+| Configurations | SAT, BDD, Z3 | List all valid configurations |
+| Number of configurations | SAT, BDD, Z3 | Count of valid configurations |
+| Dead features | SAT, BDD, Z3 | Features that appear in no valid configuration |
+| Core features | SAT, Z3 | Features present in every valid configuration |
+| False optional features | SAT, Z3 | Optional features that are always selected |
+| Sampling | SAT, BDD | A random sample of valid configurations (choose a size) |
+| Backbone | SAT | Features fixed across all configurations |
+| Unique features | BDD | Features that appear in exactly one configuration |
+| Variant features | BDD | Features that are neither dead nor core |
+| Pure optional features | BDD | Features whose selection is fully independent |
+| Homogeneity | BDD | Degree to which configurations resemble each other |
+| Variability | BDD | Ratio of valid configurations to total possible configurations |
+| Configurations with N features | BDD | Configurations with exactly N selected features (choose N) |
+| Feature bounds / Feature bounds (all) | Z3 | Min/max value bounds for numerical feature attributes |
+| Attribute optimization | Z3 | Minimize/maximize numerical attributes (opens a dedicated goal modal) |
+
+> Operations that need an extra input (sampling size, a feature name, N) prompt for it before running.
+
+**Configuration-driven operations** run from the **Configuration** panel against the configurator's current selection: Valid configuration, Filter, Commonality, Diagnosis, and Conflict.
 
 > If the model has syntax errors, running any operation shows an error message in the Output panel without switching views.
+
+---
+
+### Choosing a compute backend (in-browser or Remote API)
+
+The **Compute** section in the toolbar selects where analysis operations run:
+
+| Mode | Where it runs | Notes |
+|------|---------------|-------|
+| **In-browser** (default) | Pyodide / WebAssembly in your browser | Fully sandboxed — your model never leaves the machine |
+| **Remote API** | A [flamapy-rest](https://github.com/flamapy/flamapy_rest) server | Offloads heavy SAT/BDD/Z3 solving to a server; your model is uploaded on each operation |
+
+Choosing **Remote API** opens a dialog to set the server URL (default `https://rest.flamapy.org`, overridable via the `VITE_REST_API_URL` build variable); the choice and URL are remembered in your browser. The ⚙ button reopens the dialog.
+
+This is a **hybrid**: only the analysis operations are sent to the API. Editing, validation, the graph view, import/export, metrics charts, and the guided configurator always run in your browser, so WebAssembly still loads either way.
+
+> The server must allow the IDE's origin via CORS, and your model is transmitted to it — don't point it at an untrusted server.
 
 ---
 
@@ -159,12 +213,82 @@ The file downloads immediately to your browser's default download location.
 
 ---
 
-## Deploying locally
+## Deployment
 
-### Prerequisites
+The hosted instance at [ide.flamapy.org](https://ide.flamapy.org) is the easiest way to use
+FlamapyIDE. To run your own instance, deploy the Docker image — it is **self-contained**:
+nginx serves the app and reverse-proxies `/collab` to the [collaboration backend](#collaboration-backend)
+running inside the same container. One image, one command, no Node on the host.
 
-- Node.js >= 18.5
-- A browser with WebAssembly support (all modern browsers)
+### Run from Docker Hub (no build)
+
+The released image is published to Docker Hub as
+[`flamapy/flamapy-ide`](https://hub.docker.com/r/flamapy/flamapy-ide) (multi-arch:
+`linux/amd64` and `linux/arm64`):
+
+```bash
+docker run --rm -p 8080:80 flamapy/flamapy-ide
+```
+
+Then open http://localhost:8080. Use `:latest` (the default) for the newest stable
+release, or pin a specific version, e.g. `flamapy/flamapy-ide:1.4.0`. Collaboration is
+enabled out of the box — the WebSocket URL is derived from the page's own origin, so the
+same image works on `localhost` or any domain (use `wss://` behind a TLS-terminating proxy
+in production) without rebuilding.
+
+### Build the image yourself
+
+```bash
+docker build -t flamapy-ide .
+docker run --rm -p 8080:80 flamapy-ide
+```
+
+`docker compose up --build` does the same via `docker-compose.yml`.
+
+### Environment variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `VITE_GA_MEASUREMENT_ID` | — | Google Analytics 4 measurement ID (optional, cookie-consent gated) |
+| `VITE_REST_API_URL` | `https://rest.flamapy.org` | Default flamapy-rest server used by the optional [Remote API compute backend](#choosing-a-compute-backend-in-browser-or-remote-api) (users can override it at runtime) |
+| `VITE_ENABLE_COLLAB` | `false` (`true` in the Docker image) | Set to `"true"` to enable collaborative editing |
+| `VITE_COLLAB_URL` | same origin (`ws(s)://<host>/collab`) | WebSocket URL for the collaboration server; override to point at an external server |
+
+See `.env.example` for a template.
+
+### Collaboration backend
+
+The collaboration server is a lightweight Node.js WebSocket server using Y.js. It keeps shared documents in memory and requires no database. It exposes a `/health` endpoint — the frontend pings it before creating a session to confirm the backend is reachable.
+
+**In the Docker image (default)** — nothing to set up: the production image runs the collab server alongside nginx and proxies it at `/collab`, with collaboration enabled by default. Just `docker run` the image (see [Run from Docker Hub](#run-from-docker-hub-no-build)).
+
+**Standalone (local dev or scaling it out separately)**:
+
+```bash
+npm install
+npm run collab:server          # listens on 127.0.0.1:1234
+COLLAB_HOST=0.0.0.0 COLLAB_PORT=4000 npm run collab:server   # override host/port
+```
+
+Then run the frontend against it (in `npm run dev`, `VITE_*` are read at startup):
+
+```bash
+VITE_ENABLE_COLLAB=true VITE_COLLAB_URL=ws://localhost:1234 npm run dev
+```
+
+Or set the variables in a `.env` file (see `.env.example`). For a production build pointing at an external server, pass them at build time and use `wss://` over HTTPS:
+
+```bash
+VITE_ENABLE_COLLAB=true VITE_COLLAB_URL=wss://collab.yourdomain.com npm run build
+```
+
+---
+
+## Development
+
+### Running locally
+
+**Prerequisites:** Node.js >= 18.5 and a browser with WebAssembly support (all modern browsers).
 
 ```bash
 git clone https://github.com/flamapy/flamapy-ide.git
@@ -173,35 +297,16 @@ npm install
 npm run dev
 ```
 
-The app is available at http://localhost:5173.
+The app is available at http://localhost:5173 with hot reload.
 
----
-
-## Deploying with Docker
-
-### Build
+Prefer a container? The Docker `dev` target gives the same hot-reload server:
 
 ```bash
-# Production
-docker build -t flamapy-ide:prod --target prod .
-
-# Development (hot-reload)
 docker build -t flamapy-ide:dev --target dev .
-```
-
-### Run
-
-```bash
-# Production (Nginx on port 80)
-docker run -p 80:80 flamapy-ide:prod
-
-# Development (Vite on port 5173 with hot-reload)
 docker run -p 5173:5173 -v $(pwd):/app -v /app/node_modules flamapy-ide:dev
 ```
 
----
-
-## Running tests
+### Running tests
 
 Requires Python >= 3.11.
 
@@ -213,87 +318,7 @@ pip install public/flamapy/flamapy_configurator-2.0.1-py3-none-any.whl
 pytest --cov=public tests/
 ```
 
----
-
-## Environment variables
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `VITE_GA_MEASUREMENT_ID` | — | Google Analytics 4 measurement ID (optional, cookie-consent gated) |
-| `VITE_ENABLE_COLLAB` | `false` | Set to `"true"` to enable collaborative editing |
-| `VITE_COLLAB_URL` | `ws://localhost:1234` | WebSocket URL for the collaboration server |
-
-See `.env.example` for a template.
-
----
-
-## Enabling Z3
-
-Z3 is disabled by default due to Pyodide/WASM compatibility constraints. To enable it:
-
-1. Edit `public/flamapy/plugins.conf.json` and set `"enabled": true` for the `z3` plugin:
-
-```json
-"z3": {
-  "enabled": true,
-  "wheels": [
-    "flamapy_z3-2.5.0-py3-none-any.whl",
-    "z3_solver-4.13.4.0-py3-none-pyodide_2024_0_wasm32.whl"
-  ]
-}
-```
-
-2. Make sure the Pyodide-compatible Z3 wheel is present in `public/flamapy/`. The standard PyPI wheel **will not work** in WASM — you need the `pyodide_2024_0_wasm32` build. It must be obtained separately and placed manually (it is not downloaded by `make build-wheels`).
-
-Once enabled, a **Z3** tab appears in the Automated analysis section of the toolbar alongside SAT and BDD.
-
----
-
-## Setting up the collaboration backend
-
-The collaboration server is a lightweight Node.js WebSocket server using Y.js. It keeps shared documents in memory and requires no database.
-
-### Running the server
-
-```bash
-npm install
-npm run collab:server
-```
-
-By default it listens on `127.0.0.1:1234`. Override with environment variables:
-
-```bash
-COLLAB_HOST=0.0.0.0 COLLAB_PORT=4000 npm run collab:server
-```
-
-The server exposes a `/health` endpoint — the frontend pings it before creating a session to confirm the backend is reachable.
-
-### Running the frontend against it
-
-```bash
-VITE_ENABLE_COLLAB=true VITE_COLLAB_URL=ws://<server-host>:1234 npm run dev
-```
-
-Or set the variables in a `.env` file (see `.env.example`):
-
-```env
-VITE_ENABLE_COLLAB=true
-VITE_COLLAB_URL=ws://localhost:1234
-```
-
-### Production deployment
-
-When building for production, pass the variables at build time:
-
-```bash
-VITE_ENABLE_COLLAB=true VITE_COLLAB_URL=wss://collab.yourdomain.com npm run build
-```
-
-Use `wss://` (TLS) when deploying over HTTPS. The collab server should sit behind a reverse proxy (e.g. Nginx) that handles TLS termination.
-
----
-
-## Wheel management (contributors)
+### Wheel management
 
 Python wheels served to Pyodide are stored in `public/flamapy/`. To update them after changing versions in the Makefile:
 

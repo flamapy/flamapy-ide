@@ -1,15 +1,12 @@
 import json, math, os
 from flamapy.interfaces.python import FLAMAFeatureModel
-from flamapy.core.exceptions import FlamaException
 from antlr4 import CommonTokenStream, FileStream
 from uvl.UVLCustomLexer import UVLCustomLexer
 from uvl.UVLPythonParser import UVLPythonParser
 from antlr4.error.ErrorListener import ErrorListener
 from flamapy.core.discover import DiscoverMetamodels
 from flamapy.metamodels.fm_metamodel.transformations import GlencoeReader, AFMReader, FeatureIDEReader, JSONReader, XMLReader, UVLReader, GlencoeWriter
-from flamapy.metamodels.configuration_metamodel.models import Configuration
 from flamapy.metamodels.configurator_metamodel.transformation import FmToConfigurator
-from collections import defaultdict
 from flamapy.metamodels.fm_metamodel.operations import FMLanguageLevel
 from flamapy.metamodels.fm_metamodel.models import AttributeType
 
@@ -20,6 +17,16 @@ try:
     _z3_available = True
 except ImportError:
     _z3_available = False
+
+# SAT MaxSAT optimization is a newer flamapy-sat operation; guard the import so the IDE
+# keeps working against flamapy-sat releases that predate it.
+try:
+    from flamapy.metamodels.pysat_metamodel.transformations import FmToPysat
+    from flamapy.metamodels.pysat_metamodel.operations import PySATAttributeOptimization
+    from flamapy.core.operations import OptimizationGoal as _CoreOptimizationGoal
+    _sat_optimization_available = True
+except ImportError:
+    _sat_optimization_available = False
 
 
 fm = None
@@ -38,7 +45,6 @@ class CustomErrorListener(ErrorListener):
                 f"The UVL has the following warning that prevents reading it: "
                 f"Line {line}:{column} - {msg}"
             )
-            print(warning_message)
             self.warnings.append(warning_message)
         else:
             error_message = (
@@ -84,7 +90,10 @@ def process_uvl_file(file_path):
                 errors.append('The following feature is duplicated: {}'.format(duplicated))
             return json.dumps({'valid': False, 'errors': errors})
 
-        return json.dumps({'valid': True, 'modelInformation': get_model_information()})
+        # Model metrics are NOT computed here: validation runs on (debounced)
+        # keystrokes and some metrics (core features, atomic sets) are full
+        # analyses. The IDE requests them separately via get_model_information_json.
+        return json.dumps({'valid': True})
     except Exception as e:
         error_message = str(e)
         return json.dumps({'valid': False, 'errors': [error_message]})
@@ -104,6 +113,10 @@ def get_model_information():
     return model_information
 
 
+def get_model_information_json():
+    return json.dumps(get_model_information())
+
+
 def get_language_level(fm: FLAMAFeatureModel):
     levels = FMLanguageLevel().execute(fm.fm_model).get_result()
     major_level = levels.major.name.capitalize()
@@ -112,41 +125,69 @@ def get_language_level(fm: FLAMAFeatureModel):
     return "{}{}".format(major_level, minors_suffix)
 
 
-def execute_pysat_operation(name: str):
-    dm = DiscoverMetamodels()
-    feature_model = fm.fm_model
-    if 'BDD' in name:
-        bdd_model = dm.use_transformation_m2m(feature_model, 'bdd')
-        operation = dm.get_operation(bdd_model, name)
-        operation.execute(bdd_model)
+def _facade_display_item(item):
+    """Render a single result item as a readable one-line string."""
+    if isinstance(item, dict):
+        return ", ".join("{}: {}".format(k, v) for k, v in item.items())
+    if isinstance(item, (list, tuple, set)):
+        return ", ".join(str(i) for i in item)
+    return str(item)
 
-    elif 'PySAT' in name:
-        if name in ['PySATConflictDetection', 'PySATDiagnosis']:
-            sat_model = dm.use_transformation_m2m(feature_model, "pysat_diagnosis")
-        else:
-            sat_model = dm.use_transformation_m2m(feature_model, "pysat")
-        # Get the operation
-        operation = dm.get_operation(sat_model, name)
-        # Execute the operation
-        operation.execute(sat_model)
-    
-    elif 'Z3' in name:
-        if not _z3_available:
-            return json.dumps("Z3 plugin is not installed.")
-        print(f"Executing Z3 operation {name}")
-        z3_model = dm.use_transformation_m2m(feature_model, "z3")
-        # Get the operation
-        operation = dm.get_operation(z3_model, name)
-        # Execute the operation
-        operation.execute(z3_model)
-        
-    # Get and print the result
-    result = operation.get_result()
-    if type(result) is list:
-        return json.dumps([str(conf) for conf in result])
-    if isinstance(result, (defaultdict, dict)):
-        return json.dumps(["{}: {}".format(str(k), str(v)) for k,v in result.items()])
-    return json.dumps(result)
+
+def _serialize_facade_result(result):
+    """JSON-serialize any facade result for display in the IDE output panel.
+
+    The facade returns ``None`` when an operation cannot be computed (missing
+    plugin or unsupported model); that is surfaced as a readable message.
+    """
+    if result is None:
+        return json.dumps(
+            "The operation could not be computed. The required plugin may be "
+            "unavailable or the operation may not be supported for this model."
+        )
+    if isinstance(result, bool) or isinstance(result, (int, float, str)):
+        return json.dumps(result)
+    if isinstance(result, dict):
+        return json.dumps(
+            ["{}: {}".format(k, _facade_display_item(v)) for k, v in result.items()]
+        )
+    if isinstance(result, (list, tuple, set)):
+        return json.dumps([_facade_display_item(i) for i in result])
+    return json.dumps(str(result))
+
+
+def execute_facade_operation(name: str, args_json: str = "{}"):
+    """Run any FLAMAFeatureModel facade method by name and JSON-serialize its result.
+
+    ``args_json`` is a JSON object whose keys are forwarded as keyword arguments
+    (e.g. {"backend": "sat"}). The facade hides backend selection and result
+    post-processing, so this single dispatcher replaces the per-backend routing.
+    """
+    args = json.loads(args_json) if args_json else {}
+    method = getattr(fm, name, None)
+    if not callable(method):
+        return json.dumps("Unknown operation '{}'.".format(name))
+    return _serialize_facade_result(method(**args))
+
+
+def execute_facade_operation_with_config(
+    name: str, configs_json: str = "{}", args_json: str = "{}"
+):
+    """Run a facade method that needs one or more configuration inputs.
+
+    ``configs_json`` maps each configuration keyword argument (e.g. "configuration_path",
+    "test_case_path") to a {feature: value} mapping, passed straight to the facade — which
+    accepts a mapping, a Configuration, or a path. ``args_json`` carries the remaining
+    scalar kwargs (e.g. backend, full_configuration, max_diagnoses).
+    """
+    args = json.loads(args_json) if args_json else {}
+    configs = json.loads(configs_json) if configs_json else {}
+    method = getattr(fm, name, None)
+    if not callable(method):
+        return json.dumps("Unknown operation '{}'.".format(name))
+    args.update(configs)
+    return _serialize_facade_result(method(**args))
+
 
 def execute_export_transformation(transformation: str):
     dm = DiscoverMetamodels()
@@ -226,9 +267,7 @@ def get_features():
 def get_numerical_attributes():
     if fm:
         attributes = {attr.name for attr in fm.fm_model.get_attributes() if attr.attribute_type in [AttributeType.INTEGER, AttributeType.REAL]}
-        attributes = list(attributes)
-        print("Numerical attributes:", attributes)
-        return attributes
+        return list(attributes)
 
 def get_configuration_distribution():
     dm = DiscoverMetamodels()
@@ -254,7 +293,6 @@ def get_feature_inclusion_probabilities():
     return {'x': x_axis, 'y': y_axis, 'colors': colors}
 
 def get_feature_flow_map(attribute_name: str):
-    print(f"Generating feature flow map for attribute: {attribute_name}")
     def get_feature_value(feature):
         attrs = feature.get_attributes()
         if not attrs:
@@ -273,41 +311,14 @@ def get_feature_flow_map(attribute_name: str):
         if children:
             node["children"] = [build_node(child) for child in children]
         return node
-    root = fm.fm_model.root
-    result = build_node(root)
-    print("Feature Flow Map result:", result)
-    return result
+    return build_node(fm.fm_model.root)
 
-def execute_configurator_operation(name: str, conf):
-    dm = DiscoverMetamodels()
-    feature_model = fm.fm_model
-    configuration = Configuration(conf)
-    if 'BDD' in name:
-        bdd_model = dm.use_transformation_m2m(feature_model, 'bdd')
-        operation = dm.get_operation(bdd_model, name)
-        operation.set_configuration(configuration)
-        operation.execute(bdd_model)
+def execute_attribute_optimization(attributes_goals, backend='z3'):
+    if backend == 'sat':
+        return _execute_attribute_optimization_sat(attributes_goals)
 
-    elif 'PySAT' in name:
-        if name in ['PySATConflictDetection', 'PySATDiagnosis']:
-            sat_model = dm.use_transformation_m2m(feature_model, "pysat_diagnosis")
-        else:
-            sat_model = dm.use_transformation_m2m(feature_model, "pysat")
-        # Get the operation
-        operation = dm.get_operation(sat_model, name)
-        operation.set_configuration(configuration)
-        # Execute the operation
-        operation.execute(sat_model)
-    # Get and print the result
-    result = operation.get_result()
-    if type(result) is list:
-        return [str(conf) for conf in result]
-    return result
-
-def execute_attribute_optimization(attributes_goals):
     if not _z3_available:
-        return ["Z3 plugin is not installed."]
-    print("Attributes goals received:", attributes_goals)
+        return json.dumps({'results_str': ["Z3 plugin is not installed."], 'objectives': [], 'solutions': []})
 
     feature_model = fm.fm_model
     z3_model = FmToZ3(feature_model).transform()
@@ -331,6 +342,35 @@ def execute_attribute_optimization(attributes_goals):
         results_str.append(f'Config. {i}: {config_str} | {values_str}')
         attr_values = [values[attr] for attr in attributes.keys()]
         results['solutions'].append({'name': f'Config. {i}', 'configuration': config_str, 'values': attr_values})
+    results['results_str'] = results_str
+    return json.dumps(results)
+
+def _execute_attribute_optimization_sat(attributes_goals):
+    if not _sat_optimization_available:
+        return json.dumps({'objectives': [], 'solutions': [],
+                           'results_str': ["SAT attribute optimization is not available in this build."]})
+    if len(attributes_goals) != 1:
+        return json.dumps({'objectives': [], 'solutions': [],
+                           'results_str': ["The SAT backend optimizes a single attribute. Select exactly "
+                                           "one, or use z3 for multi-objective optimization."]})
+
+    attr_name = attributes_goals[0]['attribute']
+    goal_str = attributes_goals[0]['goal']
+    goal = _CoreOptimizationGoal.MINIMIZE if goal_str == 'Minimize' else _CoreOptimizationGoal.MAXIMIZE
+
+    sat_model = FmToPysat(fm.fm_model).transform()
+    op = PySATAttributeOptimization()
+    op.set_attributes({attr_name: goal})
+    configurations = op.execute(sat_model).get_result()
+    optimum = op.get_optimum().get(attr_name)
+
+    results_str = []
+    results = {'objectives': [attr_name], 'solutions': []}
+    for i, config in enumerate(configurations, 1):
+        config_str = ', '.join(f'{f}' for f in config.elements if config.is_selected(f))
+        results_str.append(f'Config. {i}: {config_str} | {attr_name}={optimum}')
+        results['solutions'].append({'name': f'Config. {i}', 'configuration': config_str,
+                                     'values': [optimum]})
     results['results_str'] = results_str
     return json.dumps(results)
 

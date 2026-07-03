@@ -1,0 +1,111 @@
+name: Release
+
+# Tag-driven release, mirroring the .dev tag schema of the flamapy packages.
+#   v1.2.3       -> docker :latest + :1.2.3, GitHub release, Render deploy
+#   v1.2.3.dev0  -> docker :dev    + :1.2.3.dev0 only (preview, no release/deploy)
+# Pushing to main no longer deploys; push a version tag to ship.
+on:
+  push:
+    tags:
+      - v[0-9]+.[0-9]+.*
+
+jobs:
+  docker:
+    name: Build & publish Docker image
+    runs-on: ubuntu-latest
+    outputs:
+      is_prerelease: ${{ steps.meta.outputs.is_prerelease }}
+    steps:
+      - name: Checkout the code
+        uses: actions/checkout@v4
+
+      - name: Compute image tags
+        id: meta
+        run: |
+          VERSION=${GITHUB_REF_NAME}
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if [[ "$VERSION" == *dev* ]]; then
+            echo "moving=dev" >> "$GITHUB_OUTPUT"
+            echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "moving=latest" >> "$GITHUB_OUTPUT"
+            echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # QEMU lets the amd64 runner also build the linux/arm64 image (Apple Silicon,
+      # ARM servers); buildx is the multi-platform builder driving it.
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_API_TOKEN }}
+
+      - name: Build and push the multi-arch Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            flamapy/flamapy-ide:${{ steps.meta.outputs.version }}
+            flamapy/flamapy-ide:${{ steps.meta.outputs.moving }}
+          build-args: |
+            VITE_GA_MEASUREMENT_ID=${{ secrets.VITE_GA_MEASUREMENT_ID }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  github-release:
+    name: Publish GitHub release
+    needs: docker
+    # Runs for every tag: real tags become full releases, .dev tags become
+    # GitHub pre-releases (see prerelease/make_latest below).
+    runs-on: ubuntu-latest
+    # The repo's default GITHUB_TOKEN is read-only; creating a release needs write.
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout git repo
+        uses: actions/checkout@v4
+        with:
+          # changelog-action diffs against the previous tag, so it needs full history.
+          fetch-depth: 0
+
+      - name: Generate changelog
+        id: changelog
+        continue-on-error: true
+        uses: Requarks/changelog-action@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ github.ref_name }}
+          writeToFile: 'false'
+
+      - name: Publish release github
+        uses: softprops/action-gh-release@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          # Fall back to GitHub's auto-generated notes if the changelog step failed.
+          body: ${{ steps.changelog.outputs.changes }}
+          generate_release_notes: ${{ steps.changelog.outcome != 'success' }}
+          # .dev tags publish as pre-releases and never become the "latest" release.
+          prerelease: ${{ needs.docker.outputs.is_prerelease == 'true' }}
+          make_latest: ${{ needs.docker.outputs.is_prerelease == 'false' }}
+
+  deploy-render:
+    name: Trigger Render deploy
+    needs: docker
+    if: needs.docker.outputs.is_prerelease == 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy
+        env:
+          deploy_url: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: curl "$deploy_url"

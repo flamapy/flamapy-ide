@@ -1,6 +1,17 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
+// Cross-origin isolation enables SharedArrayBuffer, which the IDE uses to
+// interrupt a running Pyodide operation without reloading the whole runtime.
+// `credentialless` (instead of `require-corp`) keeps third-party scripts like
+// Google Analytics loadable; Safari doesn't support it and simply falls back
+// to the restart-based stop. GitHub Pages can't set headers at all — same
+// fallback applies there. Keep in sync with nginx.conf.
+const crossOriginIsolationHeaders = {
+  "Cross-Origin-Opener-Policy": "same-origin",
+  "Cross-Origin-Embedder-Policy": "credentialless",
+};
+
 // https://vitejs.dev/config/
 export default defineConfig({
   base: process.env.VITE_BASE_PATH || "/",
@@ -8,6 +19,8 @@ export default defineConfig({
   optimizeDeps: {
     exclude: ["pyodide"],
   },
+  server: { headers: crossOriginIsolationHeaders },
+  preview: { headers: crossOriginIsolationHeaders },
 });
 
 // Mirrors the nginx /raw location: decodes ?model= (base64 UTF-8) and returns

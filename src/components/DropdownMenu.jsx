@@ -30,9 +30,9 @@ const DropdownMenu = ({
     setIsOpen((prev) => !prev);
   };
 
-  const handleAction = async (action) => {
-    await executeAction(action);
+  const handleAction = (action) => {
     setIsOpen(false);
+    executeAction(action);
   };
 
   const handleKeyDown = (e) => {
@@ -87,12 +87,20 @@ const DropdownMenu = ({
         aria-expanded={isOpen}
       >
         {buttonLabel}
-        <span className="ml-2">&#9660;</span>
+        <svg
+          className={`ml-2 w-3 h-3 shrink-0 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+        </svg>
       </button>
 
       {isOpen && (
         <div
-          className="fixed bg-white dark:bg-gray-800 border border-[#356C99] dark:border-gray-600 rounded-lg shadow-lg z-50"
+          className="fixed bg-white dark:bg-gray-800 border border-black/10 dark:border-white/10 rounded-md shadow-lg z-50 py-1 overflow-hidden"
           style={{
             top: menuStyle?.top ?? 0,
             left: menuStyle?.left ?? 0,
@@ -123,10 +131,10 @@ const DropdownMenu = ({
                   onClick={() => handleAction(option)}
                   onKeyDown={(e) => e.key === "Enter" && handleAction(option)}
                   tabIndex={0}
-                  className={`w-full text-left py-2 px-4 cursor-pointer focus:outline-none ${
+                  className={`w-full text-left py-1.5 px-3 text-[13px] cursor-pointer focus:outline-none transition-colors ${
                     focusedIndex === idx
-                      ? "bg-[#0D486C] text-white"
-                      : "text-[#356C99] dark:text-blue-300 hover:bg-[#0D486C] hover:text-white focus:bg-[#0D486C] focus:text-white"
+                      ? "bg-accent text-white"
+                      : "text-gray-700 dark:text-gray-200 hover:bg-accent hover:text-white focus:bg-accent focus:text-white"
                   }`}
                   role="option"
                   aria-selected={focusedIndex === idx}
