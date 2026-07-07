@@ -57,6 +57,36 @@ ${installStatements}
     return this.pluginsConfig;
   }
 
+  // Capability catalog (solver backends + analysis/structural operations) derived
+  // from the installed flamapy plugins. The IDE builds its solver tabs and
+  // operation menus from this instead of a hardcoded table, so a plugin installed
+  // at runtime (installPlugin) surfaces without any IDE code change.
+  async getPluginCatalog() {
+    const json = await this.pyodide.runPythonAsync(`get_plugin_catalog()`);
+    return JSON.parse(json);
+  }
+
+  // Install one plugin's wheels at runtime and return the refreshed catalog.
+  // `wheelRefs` are micropip targets: a bundled path ("flamapy/<name>-<ver>.whl")
+  // or an absolute URL. `deps=False` mirrors loadFlamapy, so the caller must list
+  // every dependency wheel; `pyodidePackages` covers native packages served by
+  // Pyodide (e.g. python-sat).
+  async installPlugin(data) {
+    const { wheelRefs = [], pyodidePackages = [] } = data || {};
+    await this.pyodide.loadPackage("micropip");
+    if (pyodidePackages.length > 0) {
+      await this.pyodide.loadPackage(pyodidePackages);
+    }
+    this.pyodide.globals.set("wheel_refs", JSON.stringify(wheelRefs));
+    await this.pyodide.runPythonAsync(`
+import micropip, json
+for _ref in json.loads(wheel_refs):
+    await micropip.install(_ref, deps=False)
+`);
+    const catalog = await this.pyodide.runPythonAsync(`refresh_plugins()`);
+    return JSON.parse(catalog);
+  }
+
   // Lets the main thread interrupt a running Python operation (SIGINT) via a
   // SharedArrayBuffer; only available when the page is cross-origin isolated.
   setInterruptBuffer(buffer) {

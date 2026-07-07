@@ -4,22 +4,16 @@ WHEELS_DIR = assets
 # Output directory for flamapy plugin wheels served by the IDE
 FLAMAPY_WHEELS_DIR = public/flamapy
 
-# Flamapy package version to download from PyPI.
-# Single source of truth: ./flamapy.version (one line, e.g. "2.5.0").
-FLAMAPY_VERSION = $(shell sed -e 's/#.*//' -e '/^[[:space:]]*$$/d' flamapy.version | head -n1 | tr -d '[:space:]')
+# The flamapy-authored wheels (flamapy_fw/fm/sat/bdd/z3 + umbrella flamapy) are NOT
+# downloaded here: scripts/update_flamapy_wheels.py pulls them from the flamapy GitHub
+# release bundle for the version pinned in ./flamapy.version (that script resolves the
+# version itself, so no FLAMAPY_VERSION is needed in this Makefile).
+# Note: flamapy-configurator has no release bundle; its wheel is vendored in
+# public/flamapy/ and must be updated manually when a release is made.
 
-# Core flamapy packages (pure-python, work in Pyodide as-is).
-# Note: flamapy-configurator has no PyPI release; its wheel is vendored
-# in public/flamapy/ and must be updated manually when a release is made.
-FLAMAPY_CORE_PACKAGES = \
-	flamapy-fw==$(FLAMAPY_VERSION) \
-	flamapy-fm==$(FLAMAPY_VERSION) \
-	flamapy-sat==$(FLAMAPY_VERSION) \
-	flamapy-bdd==$(FLAMAPY_VERSION) \
-	flamapy-z3==$(FLAMAPY_VERSION) \
-	flamapy==$(FLAMAPY_VERSION)
-
-# Third-party pure-python deps required by flamapy plugins
+# Third-party pure-python deps required by flamapy plugins. These are not part of the
+# flamapy release bundle, so they are fetched from PyPI (binary first, else built from
+# source into a py3-none-any wheel compatible with Pyodide/WASM).
 FLAMAPY_DEPS = \
 	dd==0.6.0 \
 	ply==3.11 \
@@ -37,38 +31,41 @@ help:
 	@echo "Makefile for managing Python dependencies"
 	@echo ""
 	@echo "Usage:"
-	@echo "  make build-wheels                         Download flamapy wheels from PyPI into $(FLAMAPY_WHEELS_DIR)"
+	@echo "  make build-wheels                         Fetch flamapy wheels from the GitHub release bundle (+ deps from PyPI) into $(FLAMAPY_WHEELS_DIR)"
 	@echo "  make clean-old-wheels                     Remove wheels in $(FLAMAPY_WHEELS_DIR) not listed in plugins.conf.json"
 	@echo "  make dependencies PACKAGE=<package_name>  Download and build wheels for a package"
 	@echo "  make clean                                Remove all downloaded files in $(WHEELS_DIR)"
 	@echo "  make clean-tar                            Remove only source tarballs (.tar.gz, .zip)"
 	@echo "  make help                                 Show this help message"
 
-# Download pure-python wheels from PyPI into public/flamapy/ so the IDE can
-# serve them via Pyodide/micropip.  Uses --no-deps so only the requested
-# packages are fetched; dependency resolution happens in plugins.conf.json.
-# For each package: tries a pre-built pure-python binary wheel first; if none
-# exists on PyPI, downloads the source and builds a wheel in an isolated venv
-# (no Cython) to guarantee a py3-none-any result compatible with Pyodide/WASM.
+# Assemble the wheels served to the browser into public/flamapy/:
+#   1. flamapy-authored wheels come from the flamapy GitHub *release bundle*
+#      (scripts/update_flamapy_wheels.py), not PyPI.
+#   2. third-party deps come from PyPI: a pre-built pure-python binary wheel first;
+#      if none exists, the source is built into a wheel in an isolated venv (no
+#      Cython) to guarantee a py3-none-any result compatible with Pyodide/WASM.
+# --no-deps is used throughout; dependency resolution is expressed in plugins.conf.json.
 .PHONY: build-wheels
 build-wheels:
 	@mkdir -p $(FLAMAPY_WHEELS_DIR)
-	@echo "Downloading flamapy wheels into $(FLAMAPY_WHEELS_DIR)..."
+	@echo "Fetching flamapy wheels from the GitHub release bundle..."
+	@FLAMAPY_WHEELS_DIR=$(FLAMAPY_WHEELS_DIR) python3 scripts/update_flamapy_wheels.py
+	@echo "Downloading third-party dependency wheels from PyPI..."
 	@tmpdir=$$(mktemp -d); \
 	mkdir -p $$tmpdir/src; \
-	python -m venv $$tmpdir/build-env; \
+	python3 -m venv $$tmpdir/build-env; \
 	$$tmpdir/build-env/bin/pip install --quiet setuptools wheel; \
 	ok=0; fail=0; \
-	for pkg in $(FLAMAPY_CORE_PACKAGES) $(FLAMAPY_DEPS); do \
+	for pkg in $(FLAMAPY_DEPS); do \
 		printf "  %-55s" "$$pkg"; \
-		if pip download --no-deps --only-binary=:all: --platform none \
+		if python3 -m pip download --no-deps --only-binary=:all: --platform none \
 				--python-version 3.11 --abi none \
 				--dest $(FLAMAPY_WHEELS_DIR) "$$pkg" -q 2>/dev/null; then \
 			echo "[binary]"; ok=$$((ok+1)); \
 		else \
 			echo "[building from source]"; \
 			rm -f $$tmpdir/src/*; \
-			if pip download --no-deps --no-binary=:all: \
+			if python3 -m pip download --no-deps --no-binary=:all: \
 					--dest $$tmpdir/src "$$pkg" -q 2>/dev/null && \
 			   $$tmpdir/build-env/bin/pip wheel --no-deps \
 					--wheel-dir $(FLAMAPY_WHEELS_DIR) $$tmpdir/src/* -q 2>/dev/null; then \

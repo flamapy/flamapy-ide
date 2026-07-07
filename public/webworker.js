@@ -5,7 +5,13 @@ async function loadFlamapyWorker() {
   await self.flamapy.loadFlamapy();
 }
 let flamapyReadyPromise = loadFlamapyWorker()
-  .then(() => self.postMessage({ status: "loaded", pluginsConfig: self.flamapy.getPluginsConfig() }))
+  .then(async () =>
+    self.postMessage({
+      status: "loaded",
+      pluginsConfig: self.flamapy.getPluginsConfig(),
+      pluginCatalog: await self.flamapy.getPluginCatalog(),
+    })
+  )
   .catch((exception) => self.postMessage({ status: "error", exception }));
 
 async function handleMessage(event) {
@@ -17,6 +23,10 @@ async function handleMessage(event) {
       results = await self.flamapy.validateModel(data);
     } else if (action === "getModelInformation") {
       results = await self.flamapy.getModelInformation();
+    } else if (action === "getPluginCatalog") {
+      results = await self.flamapy.getPluginCatalog();
+    } else if (action === "installPlugin") {
+      results = await self.flamapy.installPlugin(data);
     } else if (action === "executeFacadeOperation") {
       results = await self.flamapy.executeFacadeOperation(data);
     } else if (action === "executeFacadeOperationWithConfig") {

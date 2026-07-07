@@ -58,6 +58,7 @@ jobs:
             flamapy/flamapy-ide:${{ steps.meta.outputs.moving }}
           build-args: |
             VITE_GA_MEASUREMENT_ID=${{ secrets.VITE_GA_MEASUREMENT_ID }}
+            GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 
-function attachHandler(worker, pendingRef, setIsLoaded, setPluginsConfig) {
+function attachHandler(worker, pendingRef, setIsLoaded, setPluginsConfig, setPluginCatalog) {
   worker.onmessage = (event) => {
     const { status, exception, msgId, results, error } = event.data;
 
     if (status === "loaded") {
       setIsLoaded(true);
       setPluginsConfig(event.data.pluginsConfig ?? null);
+      setPluginCatalog(event.data.pluginCatalog ?? null);
       return;
     }
 
@@ -41,6 +42,7 @@ function createInterruptBuffer() {
 export function useWorkerClient() {
   const [isLoaded, setIsLoaded] = useState(false);
   const [pluginsConfig, setPluginsConfig] = useState(null);
+  const [pluginCatalog, setPluginCatalog] = useState(null);
   const pendingRef = useRef(new Map());
   const workerRef = useRef(null);
   const nextIdRef = useRef(0);
@@ -49,7 +51,7 @@ export function useWorkerClient() {
   const spawnWorker = useCallback(() => {
     const worker = new Worker(`${import.meta.env.BASE_URL}webworker.js`);
     workerRef.current = worker;
-    attachHandler(worker, pendingRef, setIsLoaded, setPluginsConfig);
+    attachHandler(worker, pendingRef, setIsLoaded, setPluginsConfig, setPluginCatalog);
     if (interruptBufferRef.current) {
       worker.postMessage({
         command: "setInterruptBuffer",
@@ -72,6 +74,18 @@ export function useWorkerClient() {
     });
   }, []);
 
+  // Install a plugin at runtime (micropip in the worker), then adopt the refreshed
+  // capability catalog the worker returns so solver tabs and operation menus update
+  // live. `data` is { wheelRefs, pyodidePackages }.
+  const installPlugin = useCallback(
+    async (data) => {
+      const catalog = await call("installPlugin", data);
+      if (catalog) setPluginCatalog(catalog);
+      return catalog;
+    },
+    [call]
+  );
+
   // Raise KeyboardInterrupt inside the running Python operation. Returns false
   // when the interrupt buffer is unavailable (caller should restart instead).
   const interrupt = useCallback(() => {
@@ -90,5 +104,5 @@ export function useWorkerClient() {
     spawnWorker();
   }, [spawnWorker]);
 
-  return { isLoaded, pluginsConfig, call, interrupt, restart };
+  return { isLoaded, pluginsConfig, pluginCatalog, call, installPlugin, interrupt, restart };
 }

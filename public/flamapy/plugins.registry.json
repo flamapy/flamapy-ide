@@ -1,0 +1,39 @@
+{
+  "$comment": "Curated catalog of optional flamapy plugins the IDE's Manage Plugins dialog can install at runtime, in addition to the three bundled-and-enabled defaults (sat, bdd, z3) in plugins.conf.json. Each entry is installed via micropip (see public/flamapy/flamapy.js installPlugin). `wheelRefs` are micropip targets: bundled paths served from public/flamapy ('flamapy/<name>-<ver>.whl') or absolute URLs. Because installPlugin uses deps=False, `wheelRefs` must list every dependency wheel and `pyodidePackages` every native package served by Pyodide. Set `available:false` (with empty wheelRefs) for plugins whose solver needs a native extension for which no Pyodide/wasm wheel exists yet — the dialog shows these disabled with `note`. When a wasm wheel is built, flip `available:true` and fill wheelRefs (the Makefile stamps versioned filenames, see scripts/generate_plugins_manifest.py).",
+  "version": 1,
+  "plugins": [
+    {
+      "key": "sdd",
+      "label": "SDD",
+      "backend": "sdd",
+      "description": "Sentential Decision Diagram backend (flamapy-sdd). Adds satisfiable, configurations number, core and dead features via an SDD compilation of the model.",
+      "native": true,
+      "available": false,
+      "note": "Requires the native PySDD library; no Pyodide/wasm wheel is available yet.",
+      "wheelRefs": [],
+      "pyodidePackages": []
+    },
+    {
+      "key": "dnnf",
+      "label": "d-DNNF",
+      "backend": "dnnf",
+      "description": "Deterministic Decomposable Negation Normal Form backend (flamapy-dnnf) for exact model counting and related analyses.",
+      "native": true,
+      "available": false,
+      "note": "Requires a native d-DNNF compiler; no Pyodide/wasm wheel is available yet.",
+      "wheelRefs": [],
+      "pyodidePackages": []
+    },
+    {
+      "key": "sharpsat",
+      "label": "#SAT",
+      "backend": "sharpsat",
+      "description": "Sharp-SAT backend (flamapy-sharpsat) for (approximate) configuration counting on large models.",
+      "native": true,
+      "available": false,
+      "note": "Requires a native #SAT solver; no Pyodide/wasm wheel is available yet.",
+      "wheelRefs": [],
+      "pyodidePackages": []
+    }
+  ]
+}

@@ -22,9 +22,12 @@ jobs:
           python-version: "3.11"
 
       # The flamapy wheels served to the browser are not tracked in git (see
-      # .gitignore); regenerate them from flamapy.version so the tests run
-      # against the same artifacts the browser loads.
+      # .gitignore); regenerate them so the tests run against the same artifacts
+      # the browser loads. The flamapy-authored wheels come from the flamapy GitHub
+      # release bundle; GITHUB_TOKEN lifts the API rate limit.
       - name: Build flamapy wheels
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: make build-wheels
 
       - name: Install dependencies

@@ -21,10 +21,17 @@ import ParetoFrontChart from "../../components/ParetoFrontChart";
 import ErrorBoundary from "../../components/ErrorBoundary";
 import OperationInputModal from "../../components/OperationInputModal";
 import BackendSettingsModal from "../../components/BackendSettingsModal";
+import PluginManagerModal from "../../components/PluginManagerModal";
 import AttributeOptimizationModal from "../../components/AttributeOptimizationModal";
 import AttributeSelectionModal from "../../components/AttributeSelectionModal";
 import JSZip from "jszip";
 import { useWorkerClient } from "../../hooks/useWorkerClient";
+import {
+  solverOptionsFromCatalog,
+  installedBackends,
+  structuralOperationsFromCatalog,
+  analysisOperationsForSolver,
+} from "../../utils/operationCatalog";
 import {
   WASM,
   REST,
@@ -36,73 +43,34 @@ import {
   executeRestOperationWithConfig,
 } from "../../utils/computeBackend";
 
-// Canonical operation table — the single source of truth for every analysis the IDE
-// exposes. Each row is one FLAMAFeatureModel facade method (`method`); the per-solver
-// menus and any other capability-driven view derive from this array.
-//
-//  - No `solvers`  → FM-level structural operation, always available, no backend.
-//  - `solvers`     → backends that implement it. The facade takes a `backend` kwarg
-//                    exactly when more than one backend supports the operation, so
-//                    `backendAware` is derived (see operationsForSolver) rather than set.
-//  - `engine: "legacy"` → not yet on the facade (needs extra UI: config input or a
-//                    dedicated modal); dispatched by the raw class name in `value`.
-//  - `input`       → the operation needs one extra argument collected from the user
-//                    before running: { kind: "feature"|"integer", arg, prompt, min? }.
-//                    `arg` is the facade keyword the collected value is passed as.
-const OPERATIONS = [
-  // FM-level structural operations (flamapy-fm is always present)
-  { method: "metrics", label: "Metrics" },
-  { method: "atomic_sets", label: "Atomic sets" },
-  { method: "variation_points", label: "Variation points" },
-  { method: "leaf_features", label: "Leaf features" },
-  { method: "average_branching_factor", label: "Average branching factor" },
-  { method: "count_leafs", label: "Leaf count" },
-  { method: "max_depth", label: "Max depth" },
-  { method: "estimated_number_of_configurations", label: "Estimated configurations" },
-  { method: "feature_ancestors", label: "Feature ancestors",
-    input: { kind: "feature", arg: "feature_name", prompt: "Select a feature" } },
+// The analysis/structural operation menus are derived at runtime from the plugin
+// capability catalog the Pyodide bridge reports (which backends implement which
+// operations), so runtime-installed plugins surface without an IDE edit. The
+// derivation + the IDE's presentation layer (labels, input prompts, order, the one
+// legacy modal operation) live in ../../utils/operationCatalog.
 
-  // Analysis operations — `solvers` is the single source of truth for backend support
-  { method: "satisfiable", label: "Satisfiable", solvers: ["sat", "bdd", "z3"] },
-  { method: "configurations", label: "Configurations", solvers: ["sat", "bdd", "z3"] },
-  { method: "configurations_number", label: "Number of configurations", solvers: ["sat", "bdd", "z3"] },
-  { method: "dead_features", label: "Dead features", solvers: ["sat", "bdd", "z3"] },
-  { method: "core_features", label: "Core features", solvers: ["sat", "z3"] },
-  { method: "false_optional_features", label: "False optional features", solvers: ["sat", "z3"] },
-  { method: "sampling", label: "Sampling", solvers: ["sat", "bdd"],
-    input: { kind: "integer", arg: "size", prompt: "Sample size", min: 1 } },
-  { method: "backbone", label: "Backbone", solvers: ["sat"] },
-  { method: "unique_features", label: "Unique features", solvers: ["bdd"] },
-  { method: "variant_features", label: "Variant features", solvers: ["bdd"] },
-  { method: "pure_optional_features", label: "Pure optional features", solvers: ["bdd"] },
-  { method: "homogeneity", label: "Homogeneity", solvers: ["bdd"] },
-  { method: "variability", label: "Variability", solvers: ["bdd"] },
-  { method: "configurations_with_n_features", label: "Configurations with N features", solvers: ["bdd"],
-    input: { kind: "integer", arg: "n", prompt: "Number of selected features", min: 0 } },
-  { method: "all_feature_bounds", label: "Feature bounds (all)", solvers: ["z3"] },
-  { method: "feature_bounds", label: "Feature bounds", solvers: ["z3"],
-    input: { kind: "feature", arg: "variable_name", prompt: "Select a feature" } },
+// Runtime-installed plugins are remembered here so they are re-applied on the next
+// load (a fresh Pyodide worker starts with only the bundled defaults). Each stored
+// descriptor is { wheelRefs, pyodidePackages, key?, label? }.
+const INSTALLED_PLUGINS_KEY = "flamapy-ide-installed-plugins";
 
-  // SAT-only scalable/optimization operations exposed through the facade.
-  { method: "minimum_configuration", label: "Minimum configuration", solvers: ["sat"] },
-  { method: "t_wise_sampling", label: "T-wise sampling", solvers: ["sat"],
-    input: { kind: "integer", arg: "t", prompt: "t (interaction strength)", min: 1 } },
+function loadInstalledPlugins() {
+  try {
+    const raw = localStorage.getItem(INSTALLED_PLUGINS_KEY);
+    const list = raw ? JSON.parse(raw) : [];
+    return Array.isArray(list) ? list : [];
+  } catch {
+    return [];
+  }
+}
 
-  // Attribute optimization opens a dedicated modal (handled in executeAction). Backend-aware:
-  // SAT performs single-objective MaxSAT; z3 additionally supports multi-objective (Pareto).
-  { value: "AttributeOptimization", label: "Attribute optimization", solvers: ["sat", "z3"], engine: "legacy" },
-];
+function saveInstalledPlugins(list) {
+  localStorage.setItem(INSTALLED_PLUGINS_KEY, JSON.stringify(list));
+}
 
-// FM-level operations: no backend, always available.
-const STRUCTURAL_OPERATIONS = OPERATIONS.filter((op) => !op.solvers);
-
-// Analysis operations supported by a given solver, with `backendAware` derived from
-// the capability table (a facade method takes a backend kwarg iff >1 backend has it).
-const operationsForSolver = (solver) =>
-  OPERATIONS.filter((op) => op.solvers?.includes(solver)).map((op) => ({
-    ...op,
-    backendAware: op.solvers.length > 1,
-  }));
+function pluginSignature(descriptor) {
+  return descriptor.key || (descriptor.wheelRefs || []).join("|");
+}
 
 // Configuration-input operations — run from the configuration panel against the tree's
 // current selection (a {feature: value} mapping). A `method` entry runs that mapping
@@ -147,7 +115,7 @@ function EditorPage({ selectedFile, darkMode, toggleDark }) {
     ? { enabled: true, docId: docIdFromQuery, endpoint: collabEndpoint }
     : { enabled: false };
 
-  const { isLoaded, pluginsConfig, call, interrupt, restart } = useWorkerClient();
+  const { isLoaded, pluginCatalog, call, installPlugin, interrupt, restart } = useWorkerClient();
 
   const [isRunning, setIsRunning] = useState(false);
   const [isImported, setIsImported] = useState(true);
@@ -201,6 +169,7 @@ function EditorPage({ selectedFile, darkMode, toggleDark }) {
   const [computeBackend, setComputeBackend] = useState(loadBackend);
   const [restApiUrl, setRestApiUrl] = useState(loadRestUrl);
   const [isBackendModalOpen, setIsBackendModalOpen] = useState(false);
+  const [isPluginModalOpen, setIsPluginModalOpen] = useState(false);
   const editorRef = useRef(null);
   // The exact editor content the current `validation` state refers to; lets
   // ensureValidated() skip revalidation only when nothing changed since.
@@ -212,16 +181,54 @@ function EditorPage({ selectedFile, darkMode, toggleDark }) {
     if (backend === REST) setIsBackendModalOpen(true);
   }, []);
 
-  // Sync enabled plugins from worker config
-  useEffect(() => {
-    if (pluginsConfig?.plugins) {
-      const enabled = {};
-      for (const [key, val] of Object.entries(pluginsConfig.plugins)) {
-        enabled[key] = val.enabled;
+  // Install a plugin at runtime and remember it, so the choice is re-applied on the
+  // next load (a fresh worker only has the bundled defaults). `descriptor` is
+  // { wheelRefs, pyodidePackages, key?, label? }.
+  const handleInstallPlugin = useCallback(
+    async (descriptor) => {
+      await installPlugin({
+        wheelRefs: descriptor.wheelRefs,
+        pyodidePackages: descriptor.pyodidePackages,
+      });
+      const list = loadInstalledPlugins();
+      const sig = pluginSignature(descriptor);
+      if (!list.some((d) => pluginSignature(d) === sig)) {
+        saveInstalledPlugins([...list, descriptor]);
       }
+    },
+    [installPlugin]
+  );
+
+  // Re-apply remembered plugin installs once the (fresh) worker is ready.
+  useEffect(() => {
+    if (!isLoaded) return;
+    const list = loadInstalledPlugins();
+    if (list.length === 0) return;
+    (async () => {
+      for (const descriptor of list) {
+        try {
+          await installPlugin({
+            wheelRefs: descriptor.wheelRefs,
+            pyodidePackages: descriptor.pyodidePackages,
+          });
+        } catch (error) {
+          console.error("Failed to re-install plugin", descriptor, error);
+        }
+      }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoaded]);
+
+  // Which solver backends are installed, derived from the capability catalog the
+  // worker reports (updated live when a plugin is installed at runtime). Gates the
+  // solver tabs, the bdd-only metrics views, and the "keep selectedSolver valid".
+  useEffect(() => {
+    if (pluginCatalog) {
+      const enabled = {};
+      for (const backend of installedBackends(pluginCatalog)) enabled[backend] = true;
       setEnabledPlugins(enabled);
     }
-  }, [pluginsConfig]);
+  }, [pluginCatalog]);
 
   // When worker finishes loading, update output and trigger file import if needed
   useEffect(() => {
@@ -277,13 +284,15 @@ function EditorPage({ selectedFile, darkMode, toggleDark }) {
     }
   }, [enabledPlugins.bdd, currentView]);
 
-  // Derived solver tabs — only enabled plugins
-  const solverOptions = useMemo(
-    () =>
-      Object.entries(enabledPlugins)
-        .filter(([, enabled]) => enabled)
-        .map(([key]) => ({ label: key.toUpperCase(), value: key })),
-    [enabledPlugins]
+  // Solver tabs + operation menus, derived from the plugin capability catalog.
+  const solverOptions = useMemo(() => solverOptionsFromCatalog(pluginCatalog), [pluginCatalog]);
+  const structuralOptions = useMemo(
+    () => structuralOperationsFromCatalog(pluginCatalog),
+    [pluginCatalog]
+  );
+  const analysisOptions = useMemo(
+    () => analysisOperationsForSolver(pluginCatalog, selectedSolver),
+    [pluginCatalog, selectedSolver]
   );
 
   // Keep selectedSolver valid after config loads
@@ -818,12 +827,12 @@ function EditorPage({ selectedFile, darkMode, toggleDark }) {
       <TitleBar darkMode={darkMode} toggleDark={toggleDark} />
 
       <ActionToolbar
-        structuralOptions={STRUCTURAL_OPERATIONS}
+        structuralOptions={structuralOptions}
         executeAction={executeAction}
         solverOptions={solverOptions}
         selectedSolver={selectedSolver}
         setSelectedSolver={setSelectedSolver}
-        analysisOptions={operationsForSolver(selectedSolver)}
+        analysisOptions={analysisOptions}
         exportOptions={EXPORT_OPERATIONS}
         downloadFile={downloadFile}
         onShareLink={handleCopyModelLink}
@@ -847,6 +856,7 @@ function EditorPage({ selectedFile, darkMode, toggleDark }) {
           modelInfoOpen={modelInfoOpen}
           onToggleModelInfo={() => setModelInfoOpen((o) => !o)}
           onOpenBackend={() => setIsBackendModalOpen(true)}
+          onOpenPlugins={() => setIsPluginModalOpen(true)}
         />
 
         {showConfiguratorPanel && (
@@ -975,6 +985,13 @@ function EditorPage({ selectedFile, darkMode, toggleDark }) {
             setIsBackendModalOpen(false);
           }}
           onCancel={() => setIsBackendModalOpen(false)}
+        />
+      )}
+      {isPluginModalOpen && (
+        <PluginManagerModal
+          installedBackends={installedBackends(pluginCatalog)}
+          onInstall={handleInstallPlugin}
+          onClose={() => setIsPluginModalOpen(false)}
         />
       )}
     </div>

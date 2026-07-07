@@ -27,7 +27,8 @@ CMD ["npm", "run", "dev", "--", "--host"]
 
 # Stage 3: Regenerate the flamapy wheels served to the browser.
 # These wheels are not tracked in git (see .gitignore); `make build-wheels`
-# rebuilds them from flamapy.version + the Makefile dep list. The two manually
+# fetches the flamapy-authored wheels from the flamapy GitHub release bundle
+# (pinned by flamapy.version) and the third-party deps from PyPI. The two manually
 # vendored wheels (flamapy-configurator, z3_solver wasm) are copied in from the
 # build context, which `make build-wheels` leaves untouched.
 FROM python:3.11 AS wheels
@@ -35,6 +36,10 @@ WORKDIR /app
 COPY Makefile flamapy.version ./
 COPY scripts ./scripts
 COPY public/flamapy ./public/flamapy
+# Optional token to lift the GitHub API rate limit when fetching the release
+# bundle (scripts/update_flamapy_wheels.py); unauthenticated access works too.
+ARG GITHUB_TOKEN=
+ENV GITHUB_TOKEN=$GITHUB_TOKEN
 RUN make build-wheels
 
 # Stage 4: Production Build

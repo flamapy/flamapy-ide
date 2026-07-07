@@ -41,9 +41,12 @@ jobs:
       - run: npm ci
 
       # The flamapy wheels served to the browser are not tracked in git (see
-      # .gitignore); regenerate them from flamapy.version before the build so
-      # Vite copies them into dist/.
+      # .gitignore); regenerate them before the build so Vite copies them into
+      # dist/. The flamapy-authored wheels come from the flamapy GitHub release
+      # bundle; GITHUB_TOKEN lifts the API rate limit.
       - name: Build flamapy wheels
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: make build-wheels
 
       - name: Build

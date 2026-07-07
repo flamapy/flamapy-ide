@@ -125,6 +125,139 @@ def get_language_level(fm: FLAMAFeatureModel):
     return "{}{}".format(major_level, minors_suffix)
 
 
+# ---------------------------------------------------------------------------
+# Plugin capability catalog + runtime plugin installation
+#
+# The IDE builds its solver tabs and operations menus from the *installed*
+# flamapy plugins instead of a hardcoded table, so a plugin installed at runtime
+# (see install_plugin) surfaces its solver and operations with no IDE code change.
+# All derivation happens here, against the shipped flamapy wheels — the framework
+# itself is untouched.
+# ---------------------------------------------------------------------------
+
+# Backend token (what the facade's ``backend=`` kwarg and the UI tabs use) derived
+# from a plugin's model extension. Only ``pysat`` differs from its token ("sat");
+# the facade encodes the same one-off as ``_BACKEND_ALIAS = {"sat": "pysat"}``.
+_EXTENSION_TO_BACKEND = {"pysat": "sat"}
+
+# Extensions that are not selectable analysis backends: the base feature model
+# (structural operations run on it directly) and configuration models (their
+# operations need a configuration input and are driven from the config panel).
+_NON_BACKEND_EXTENSIONS = {"fm", "configuration", "configurator"}
+
+
+def _humanize_operation(name: str) -> str:
+    """A readable default label for an operation whose method name is snake_case."""
+    return name.replace('_', ' ').capitalize()
+
+
+def _input_kind(inp) -> str:
+    """Map a framework Input to a UI input kind: 'integer', 'feature', or 'scalar'.
+
+    The framework does not tag an input as "a feature name", so it is inferred from
+    the type (int -> integer) and a name convention; the IDE only needs this to pick
+    a number field vs a feature picker, and unknown inputs fall back to a text field.
+    """
+    if inp.type is int:
+        return "integer"
+    if inp.name.endswith("_name") or inp.name in ("feature", "variable"):
+        return "feature"
+    return "scalar"
+
+
+def _catalog_from_discovery(dm: DiscoverMetamodels) -> dict:
+    """Build the plugin/operation catalog from a discovery instance.
+
+    Returns ``{plugins: [...], operations: [...]}`` where each operation carries the
+    backend tokens that implement it (derived, since the descriptor's ``backends``
+    field is not populated in flamapy 2.6). Only analysis operations ('operation'
+    kind, no configuration input) are included; producers, transformers and
+    configuration-driven operations are surfaced through their own dedicated UI.
+    """
+    plugins: dict[str, dict] = {}   # backend token -> {name, extension}
+    operations = []
+
+    def plugin_backend(plugin):
+        try:
+            extension = plugin.get_extension()
+        except Exception:
+            return None
+        if not extension or extension in _NON_BACKEND_EXTENSIONS:
+            return None
+        return _EXTENSION_TO_BACKEND.get(extension, extension), extension
+
+    for name, descriptor in dm.available_operations().items():
+        if descriptor.kind != 'operation':
+            continue
+        if any(inp.kind == 'configuration' for inp in descriptor.inputs):
+            continue
+
+        backends = []
+        for plugin in dm.get_plugins_with_operation(descriptor.operation):
+            resolved = plugin_backend(plugin)
+            if resolved is None:
+                continue
+            token, extension = resolved
+            backends.append(token)
+            plugins.setdefault(token, {"name": plugin.name, "extension": extension})
+
+        backends = sorted(set(backends))
+        operations.append({
+            "method": name,
+            "operation": descriptor.operation,
+            "label": _humanize_operation(name),
+            "structural": len(backends) == 0,
+            "backends": backends,
+            "selectableBackend": bool(descriptor.selectable_backend),
+            "inputs": [
+                {
+                    "name": inp.name,
+                    "kind": _input_kind(inp),
+                    "required": bool(inp.required),
+                }
+                for inp in descriptor.inputs
+            ],
+        })
+
+    catalog_plugins = [
+        {"backend": token, "name": info["name"], "extension": info["extension"]}
+        for token, info in sorted(plugins.items())
+    ]
+    return {"plugins": catalog_plugins, "operations": operations}
+
+
+def get_plugin_catalog():
+    """JSON capability catalog of the installed plugins, for the IDE to build its UI."""
+    return json.dumps(_catalog_from_discovery(DiscoverMetamodels()))
+
+
+def refresh_plugins():
+    """Re-scan installed plugins and re-init the facade so new operations are callable.
+
+    The actual ``micropip.install`` of a plugin wheel happens on the JS side (see
+    flamapy.js), where the async loader lives. This performs the Python-side
+    re-initialisation the frozen facade needs afterwards, and returns the refreshed
+    catalog so the worker can hand the UI the new surface.
+    """
+    import importlib
+    from flamapy.interfaces.python import flamapy_feature_model as _ffm
+
+    importlib.invalidate_caches()
+    # Rebuild the module-level discovery the facade + producers share, then re-run the
+    # installer so the new operations are added as methods on the FLAMAFeatureModel
+    # class. Methods live on the class, so the existing ``fm`` instance sees them and
+    # its loaded model is preserved.
+    _ffm._DISCOVERY = DiscoverMetamodels()
+    _ffm._install_operations(_ffm.FLAMAFeatureModel)
+    # The loaded instance carries its own discovery (built at construction, before the
+    # new plugin existed); re-scan it too so new backends/transformations resolve, and
+    # drop its cached fm->backend models so they rebuild against the new plugin set.
+    if fm is not None:
+        fm.discover_metamodel.reload()
+        fm._backend_models = {}
+    return get_plugin_catalog()
+
+
 def _facade_display_item(item):
     """Render a single result item as a readable one-line string."""
     if isinstance(item, dict):
