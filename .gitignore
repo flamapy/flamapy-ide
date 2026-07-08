@@ -51,6 +51,8 @@ public/flamapy/*.whl
 !public/flamapy/z3_solver-*.whl
 !public/flamapy/flamapy_sharpsat-*.whl
 !public/flamapy/pyunigen-*.whl
+!public/flamapy/flamapy_sdd-*.whl
+!public/flamapy/pysdd-*.whl
 
 # The served manifest carries versioned wheel filenames, so it too is a build
 # artifact: `make build-wheels` generates it from the tracked, version-less

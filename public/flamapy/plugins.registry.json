@@ -8,9 +8,12 @@
       "backend": "sdd",
       "description": "Sentential Decision Diagram backend (flamapy-sdd). Adds satisfiable, configurations number, core and dead features via an SDD compilation of the model.",
       "native": true,
-      "available": false,
-      "note": "Requires the native PySDD library; no Pyodide/wasm wheel is available yet.",
-      "wheelRefs": [],
+      "available": true,
+      "note": "SDD compilation (UCLA libsdd 2.0 via PySDD) compiled to WebAssembly.",
+      "wheelRefs": [
+        "flamapy/pysdd-1.0.6-cp312-cp312-pyodide_2024_0_wasm32.whl",
+        "flamapy/flamapy_sdd-2.6.0-py3-none-any.whl"
+      ],
       "pyodidePackages": []
     },
     {
@@ -20,7 +23,7 @@
       "description": "Deterministic Decomposable Negation Normal Form backend (flamapy-dnnf) for exact model counting and related analyses.",
       "native": true,
       "available": false,
-      "note": "Requires a native d-DNNF compiler; no Pyodide/wasm wheel is available yet.",
+      "note": "Requires the external d4 compiler invoked via subprocess; not portable to Pyodide (no process spawning in the browser) without porting d4 to wasm and rewriting the plugin to call it in-process.",
       "wheelRefs": [],
       "pyodidePackages": []
     },
