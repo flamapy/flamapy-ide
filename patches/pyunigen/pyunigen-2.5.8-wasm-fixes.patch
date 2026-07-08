@@ -1,0 +1,37 @@
+--- a/src/sampler.h	2024-02-08 22:19:21.000000000 +0100
++++ b/src/sampler.h	2026-07-08 11:29:49.260934832 +0200
+@@ -108,8 +108,8 @@
+ class Sampler {
+ public:
+     void sample(
+-        const Config conf,
+-        const SolCount sol_count,
++        const Config& conf,
++        const SolCount& sol_count,
+         const uint32_t num_samples);
+     AppMC* appmc;
+     SATSolver* solver = NULL;
+--- a/src/sampler.cpp	2024-02-08 22:19:21.000000000 +0100
++++ b/src/sampler.cpp	2026-07-08 11:29:49.261187228 +0200
+@@ -254,8 +254,8 @@
+ }
+ 
+ void Sampler::sample(
+-    Config _conf,
+-    const ApproxMC::SolCount solCount,
++    const Config& _conf,
++    const ApproxMC::SolCount& solCount,
+     const uint32_t num_samples)
+ {
+     conf = _conf;
+@@ -344,7 +344,9 @@
+     hiThresh = ceil(1 + (1.4142136 * (1 + conf.kappa) * threshold_Samplergen));
+     loThresh = floor(threshold_Samplergen / (1.4142136 * (1 + conf.kappa)));
+     const uint32_t samplesPerCall = sols_to_return(num_samples_needed);
+-    const uint32_t callsNeeded =
++    // samplesPerCall == 0 when no samples are requested (count-only use) and
++    // startiter == 0; guard the division (0/0 traps on wasm).
++    const uint32_t callsNeeded = samplesPerCall == 0 ? 0 :
+         num_samples_needed / samplesPerCall + (bool)(num_samples_needed % samplesPerCall);
+ 
+     if (conf.verb) {

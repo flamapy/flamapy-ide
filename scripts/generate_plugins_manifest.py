@@ -59,6 +59,16 @@ def main() -> int:
             + ", ".join(sorted(set(missing))) + "\nRun `make build-wheels` to fetch them."
         )
 
+    # Wheels referenced by the runtime-install registry (plugins.registry.json) are
+    # served on demand by the Plugin Manager, not loaded at boot — don't flag them.
+    registry_path = WHEELS_DIR / "plugins.registry.json"
+    if registry_path.exists():
+        registry = json.loads(registry_path.read_text())
+        for plugin in registry.get("plugins", []):
+            for ref in plugin.get("wheelRefs", []):
+                if ref.startswith("flamapy/"):
+                    resolved.add(package_key(os.path.basename(ref)))
+
     unused = sorted(set(by_name) - resolved)
     if unused:
         print(

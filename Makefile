@@ -85,15 +85,18 @@ build-wheels:
 	@echo "Wheels in $(FLAMAPY_WHEELS_DIR):"; \
 	ls $(FLAMAPY_WHEELS_DIR)/*.whl
 
-# Remove any .whl files in FLAMAPY_WHEELS_DIR that are not listed in plugins.conf.json.
+# Remove any .whl files in FLAMAPY_WHEELS_DIR that are not listed in plugins.conf.json
+# or referenced (as 'flamapy/<wheel>' paths) by plugins.registry.json wheelRefs.
 # This cleans up old versions left behind after upgrading packages.
 .PHONY: clean-old-wheels
 clean-old-wheels:
-	@echo "Removing wheels not listed in $(FLAMAPY_WHEELS_DIR)/plugins.conf.json..."
+	@echo "Removing wheels not listed in $(FLAMAPY_WHEELS_DIR)/plugins.conf.json or plugins.registry.json..."
 	@python3 -c "import json, os, glob; \
 conf = json.load(open('$(FLAMAPY_WHEELS_DIR)/plugins.conf.json')); \
 needed = set(conf['core']['wheels']); \
 [needed.update(p['wheels']) for p in conf['plugins'].values()]; \
+reg = json.load(open('$(FLAMAPY_WHEELS_DIR)/plugins.registry.json')); \
+[needed.update(os.path.basename(r) for r in p.get('wheelRefs', []) if r.startswith('flamapy/')) for p in reg['plugins']]; \
 stale = [f for f in sorted(glob.glob('$(FLAMAPY_WHEELS_DIR)/*.whl')) if os.path.basename(f) not in needed]; \
 [print('  Removed: ' + os.path.basename(f)) or os.remove(f) for f in stale]; \
 print('Done: ' + str(len(stale)) + ' wheel(s) removed.')"
