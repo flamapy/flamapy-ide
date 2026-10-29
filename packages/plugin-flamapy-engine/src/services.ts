@@ -3,7 +3,7 @@
  * consume these through the service registry — none of them touch the Pyodide worker or
  * the REST client directly.
  */
-import { serviceId, type Disposable } from '@flamapy/ide-plugin-api';
+import { serviceId, type Disposable, type OperationResult } from '@flamapy/ide-plugin-api';
 
 // ---------------------------------------------------------------------------------
 // Worker
@@ -120,8 +120,11 @@ export interface AnalysisService {
    * raw result as plain JSON (`data`). For IDE plugins that compute on flamapy results.
    */
   runOperationData(action: OperationAction): Promise<{ display: unknown; data: unknown }>;
-  /** Run a catalog operation on the current model (WASM or REST per the setting). */
-  runOperation(action: OperationAction): Promise<unknown>;
+  /**
+   * Run a catalog operation on the current model (WASM or REST per the setting) and get
+   * its result as the shell shows it (a table, configurations, text, ...).
+   */
+  runOperation(action: OperationAction): Promise<OperationResult>;
   runOperationWithConfig(
     action: OperationAction,
     configuration: Record<string, unknown>,

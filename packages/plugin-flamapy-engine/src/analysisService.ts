@@ -7,7 +7,7 @@ import {
   saveBackend,
   saveRestUrl,
 } from '@flamapy/web-core';
-import type { Disposable, DocumentStore } from '@flamapy/ide-plugin-api';
+import type { Disposable, DocumentStore, OperationResult } from '@flamapy/ide-plugin-api';
 
 import type {
   AnalysisService,
@@ -15,6 +15,14 @@ import type {
   OperationAction,
   ValidationResult,
 } from './services';
+
+// The REST API returns display text (a value, or a list of lines): a one-column table for
+// lists, text otherwise.
+function restResultView(label: string, display: unknown): OperationResult {
+  return Array.isArray(display)
+    ? { kind: 'table', columns: [label], rows: display.map((line) => [line]) }
+    : { kind: 'text', value: String(display) };
+}
 
 function listenerSet(): { add(l: () => void): Disposable; fire(): void } {
   const listeners = new Set<() => void>();
@@ -78,6 +86,23 @@ export function createAnalysisService(options: {
     }
   }
 
+  // Forward the selected solver only to backend-aware operations, merged with any
+  // argument already collected for the operation.
+  function argsFor(action: OperationAction): Record<string, unknown> {
+    return action.backendAware
+      ? { ...(action.args || {}), backend: selectedSolver }
+      : action.args || {};
+  }
+
+  function runRest(action: OperationAction, args: Record<string, unknown>): Promise<unknown> {
+    return executeRestOperation({
+      baseUrl: restApiUrl,
+      method: action.method as string,
+      modelText: documents.getText(),
+      args,
+    });
+  }
+
   function describeError(error: unknown): string {
     const message = (error as Error)?.message || '';
     if (message.includes('KeyboardInterrupt')) {
@@ -113,33 +138,25 @@ export function createAnalysisService(options: {
     getNumericalAttributes: () => worker.call('getNumericalAttributes'),
 
     async runOperation(action: OperationAction) {
-      // Forward the selected solver only to backend-aware operations, merged with any
-      // argument already collected for the operation.
-      const args = action.backendAware
-        ? { ...(action.args || {}), backend: selectedSolver }
-        : action.args || {};
+      const args = argsFor(action);
       if (computeBackend === REST) {
-        return executeRestOperation({
-          baseUrl: restApiUrl,
-          method: action.method as string,
-          modelText: documents.getText(),
-          args,
-        });
+        return restResultView(action.label, await runRest(action, args));
       }
-      const data = action.backendAware ? { ...action, args } : action;
-      const response = (await worker.call('executeFacadeOperation', data)) as { result: string };
-      return JSON.parse(response.result);
+      const response = (await worker.call('executeFacadeOperation', {
+        ...action,
+        args,
+        asView: true,
+      })) as { result: string };
+      return JSON.parse(response.result) as OperationResult;
     },
 
     async runOperationData(action: OperationAction) {
+      const args = argsFor(action);
       if (computeBackend === REST) {
         // The REST API returns the result itself: it is both what to show and the data.
-        const result = await this.runOperation(action);
+        const result = await runRest(action, args);
         return { display: result, data: result };
       }
-      const args = action.backendAware
-        ? { ...(action.args || {}), backend: selectedSolver }
-        : action.args || {};
       const response = (await worker.call('executeFacadeOperation', {
         ...action,
         args,

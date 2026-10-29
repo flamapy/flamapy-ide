@@ -39,7 +39,7 @@ import {
   sideOf,
   togglePanel,
 } from "./sidePanels";
-import { OperationForm, OperationResultView, needsAttributes, needsFeatures } from "./OperationUi";
+import { OperationForm, OperationResultView, needsAttributes, needsFeatures, resultText } from "./OperationUi";
 import { useCollabSession } from "./useCollabSession";
 import { ToolbarMenuSlot } from "./slots/ToolbarMenuSlot";
 import { StatusBarSlot } from "./slots/StatusBarSlot";
@@ -382,6 +382,11 @@ function Workbench({ selectedFile, darkMode, toggleDark }) {
     setInputModal(null);
   }
 
+  // A structured result: rendered with the shell's views, copyable as plain text.
+  function showResult(label, result) {
+    setOutput({ label, result: "", view: <OperationResultView result={result} />, copyText: resultText(result) });
+  }
+
   async function runContributedOperation(operation) {
     if (!isLoaded || isRunning) return;
     if (operation.requiresValidModel !== false) {
@@ -410,7 +415,7 @@ function Workbench({ selectedFile, darkMode, toggleDark }) {
       if (controller.signal.aborted) {
         setOutput({ label: operation.label, result: "Operation stopped." });
       } else if (result) {
-        setOutput({ label: operation.label, result: "", view: <OperationResultView result={result} /> });
+        showResult(operation.label, result);
       } else {
         setOutput({ label: operation.label, result: "Done." });
       }
@@ -450,7 +455,7 @@ function Workbench({ selectedFile, darkMode, toggleDark }) {
     setOutput({ label: action.label, result: "Executing operation" });
     try {
       const result = await analysis.runOperation(action);
-      setOutput({ label: action.label, result });
+      showResult(action.label, result);
     } catch (error) {
       setOutput({ label: action.label, result: analysis.describeError(error) });
     }

@@ -14,7 +14,7 @@ function fakeAnalysis(): AnalysisService {
     getFeatureTree: async () => ({ name: 'Root', children: [] }),
     getFeatures: async () => [],
     getNumericalAttributes: async () => [],
-    runOperation: async () => null,
+    runOperation: async () => ({ kind: 'text', value: '' }),
     runOperationData: async () => ({ display: null, data: null }),
     runOperationWithConfig: async () => null,
     exportModel: async () => '',

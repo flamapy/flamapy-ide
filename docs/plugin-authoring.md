@@ -205,8 +205,10 @@ ctx.subscriptions.push(
 - **Input kinds:** `integer`, `number`, `string`, `boolean`, `enum`, `feature` /
   `features` and `attribute` / `attributes`. The feature and attribute pickers are
   filled from the current model by the engine.
-- **Results:** `text`, `json`, `table` (`columns`, `rows`) or `configuration`
-  (`selected`, `deselected?`, `meta?`). Return nothing if you showed the result yourself.
+- **Results:** `text`, `json`, `table` (`columns`, `rows`), `configuration`
+  (`selected`, `deselected?`, `meta?`) or `configurations` (a list of those). flamapy's
+  own operations are shown with the same views. Return nothing if you showed the result
+  yourself.
 - **Valid model:** the shell only runs the operation on a valid model, unless you set
   `requiresValidModel: false`.
 - **Calling flamapy:** `Analysis.runOperationData(action)` runs a catalog operation and

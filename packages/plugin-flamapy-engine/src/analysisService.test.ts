@@ -96,6 +96,8 @@ describe('analysis service dispatch', () => {
     const [aware, unaware] = calls.filter((entry) => entry.action === 'executeFacadeOperation');
     expect((aware!.data as { args: { backend: string } }).args.backend).toBe('bdd');
     expect((unaware!.data as { args?: unknown }).args ?? {}).toEqual({});
+    // The output panel shows the result with the shell's views (OperationResult).
+    expect((aware!.data as { asView?: boolean }).asView).toBe(true);
   });
 
   it('describeError maps KeyboardInterrupt to a friendly message', () => {

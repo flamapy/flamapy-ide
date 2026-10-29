@@ -143,8 +143,10 @@ process_uvl_file('uvlfile.uvl')
     this.pyodide.globals.set("facade_args", JSON.stringify(action.args || {}));
     // withData: {display, data} instead of display text only (for IDE plugins).
     this.pyodide.globals.set("facade_with_data", Boolean(action.withData));
+    // asView: an OperationResult (table, configurations, ...) for the output panel.
+    this.pyodide.globals.set("facade_as_view", Boolean(action.asView));
     const result = await this.pyodide.runPythonAsync(
-      `execute_facade_operation(facade_method, facade_args, facade_with_data)`
+      `execute_facade_operation(facade_method, facade_args, facade_with_data, facade_as_view)`
     );
     return { label: action.label, result };
   }

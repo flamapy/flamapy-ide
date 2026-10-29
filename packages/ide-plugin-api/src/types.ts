@@ -241,18 +241,26 @@ export type InputSpec =
   | (InputBase & { kind: 'attribute' | 'attributes' })
   | (InputBase & { kind: 'enum'; options: { value: string; label: string }[]; default?: string });
 
-/** What an operation hands back for the shell to show in the output panel. */
+/** A configuration in an operation result. */
+export interface ResultConfiguration {
+  /** Selected features; a typed feature as `name = value`. */
+  selected: string[];
+  deselected?: string[];
+  /** Extra facts shown with it, e.g. `{ objective: 0.09 }`. */
+  meta?: Record<string, unknown>;
+}
+
+/**
+ * What an operation hands back for the shell to show in the output panel. flamapy's own
+ * operations are shown with the same views (lists of features as tables, sampling as
+ * configurations, ...).
+ */
 export type OperationResult =
   | { kind: 'text'; value: string }
   | { kind: 'json'; value: unknown }
   | { kind: 'table'; columns: string[]; rows: unknown[][] }
-  | {
-      kind: 'configuration';
-      selected: string[];
-      deselected?: string[];
-      /** Extra facts shown with it, e.g. `{ objective: 0.09 }`. */
-      meta?: Record<string, unknown>;
-    };
+  | ({ kind: 'configuration' } & ResultConfiguration)
+  | { kind: 'configurations'; configurations: ResultConfiguration[] };
 
 export interface OperationRunContext {
   /** Aborted when the user presses Stop. */

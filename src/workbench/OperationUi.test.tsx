@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { InputSpec } from '@flamapy/ide-plugin-api';
 
-import { argsFromDraft, OperationForm, OperationResultView } from './OperationUi';
+import { argsFromDraft, MAX_RENDERED_ROWS, OperationForm, OperationResultView, resultText } from './OperationUi';
 
 afterEach(cleanup);
 
@@ -67,6 +67,52 @@ describe('OperationResultView', () => {
       />,
     );
     expect(container.textContent).toContain('objective: 0.09');
-    expect(container.textContent).toContain('Selected (2): Root, GPS');
+    expect(container.textContent).toContain('Selected (2)');
+    expect([...container.querySelectorAll('.font-mono')].map((chip) => chip.textContent)).toEqual(['Root', 'GPS']);
+  });
+
+  it('numbers a list of configurations and says when there are none', () => {
+    const { container, rerender } = render(
+      <OperationResultView
+        result={{ kind: 'configurations', configurations: [{ selected: ['Root'] }, { selected: ['Root', 'GPS'] }] }}
+      />,
+    );
+    expect(container.textContent).toContain('2 configurations');
+    expect([...container.querySelectorAll('li')].map((row) => row.textContent)).toEqual(['#1Root1', '#2RootGPS2']);
+    rerender(<OperationResultView result={{ kind: 'configurations', configurations: [] }} />);
+    expect(container.textContent).toBe('No configurations.');
+    rerender(<OperationResultView result={{ kind: 'table', columns: ['Dead features'], rows: [] }} />);
+    expect(container.textContent).toBe('No results.');
+    // A one-column table is a plain list: no header, one chip per row.
+    rerender(<OperationResultView result={{ kind: 'table', columns: ['Core features'], rows: [['Car'], ['Engine']] }} />);
+    expect(container.querySelector('table')).toBeNull();
+    expect(container.textContent).toBe('2 resultsCarEngine');
+  });
+
+  it('renders at most MAX_RENDERED_ROWS rows and counts the rest', () => {
+    const rows = Array.from({ length: MAX_RENDERED_ROWS + 3 }, (_, i) => [i, i + 0.123456789]);
+    const { container } = render(<OperationResultView result={{ kind: 'table', columns: ['#', 'Value'], rows }} />);
+    expect(container.querySelectorAll('tbody tr')).toHaveLength(MAX_RENDERED_ROWS);
+    expect(container.querySelector('td:last-child')?.textContent).toBe('0.123457');
+    expect(container.textContent).toContain(`${MAX_RENDERED_ROWS + 3} results`);
+    expect(container.textContent).toContain('… and 3 more, not shown.');
+  });
+});
+
+describe('resultText', () => {
+  it('copies tables tab-separated, lists and configurations one per line, all rows', () => {
+    const rows = Array.from({ length: MAX_RENDERED_ROWS + 1 }, (_, i) => [`F${i}`, i / 3]);
+    const table = resultText({ kind: 'table', columns: ['Name', 'Probability'], rows }).split('\n');
+    expect(table).toHaveLength(MAX_RENDERED_ROWS + 2); // header + every row, not capped
+    expect(table.slice(0, 2)).toEqual(['Name\tProbability', 'F0\t0']);
+    expect(table[2]).toBe(`F1\t${1 / 3}`); // full precision
+    expect(resultText({ kind: 'table', columns: ['Core features'], rows: [['Car'], ['Engine']] })).toBe('Car\nEngine');
+    expect(
+      resultText({ kind: 'configurations', configurations: [{ selected: ['Car'] }, { selected: ['Car', 'GPS'], meta: { cost: 2 } }] }),
+    ).toBe('Car\nCar, GPS (cost: 2)');
+    expect(resultText({ kind: 'configuration', selected: ['Car'], deselected: ['GPS'] })).toBe(
+      'Selected: Car\nDeselected: GPS',
+    );
+    expect(resultText({ kind: 'text', value: 'True' })).toBe('True');
   });
 });

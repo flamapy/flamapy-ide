@@ -236,7 +236,105 @@ export function OperationForm({
 
 function formatCell(value: unknown): string {
   if (value === null || value === undefined) return '';
+  if (typeof value === 'number' && !Number.isInteger(value)) return String(Number(value.toPrecision(6)));
   return typeof value === 'object' ? JSON.stringify(value) : String(value);
+}
+
+function copyCell(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  return typeof value === 'object' ? JSON.stringify(value) : String(value);
+}
+
+function metaText(meta?: Record<string, unknown>): string {
+  return Object.entries(meta ?? {})
+    .map(([key, value]) => `${key}: ${copyCell(value)}`)
+    .join(', ');
+}
+
+/**
+ * An OperationResult as plain text for the clipboard, whole (not capped like the view):
+ * tables tab-separated (they paste into a spreadsheet as columns), one configuration per
+ * line, a list one item per line.
+ */
+export function resultText(result: OperationResult): string {
+  switch (result.kind) {
+    case 'text':
+      return result.value;
+    case 'json':
+      return JSON.stringify(result.value, null, 2);
+    case 'table': {
+      const rows = result.rows.map((row) => row.map(copyCell).join('\t'));
+      return (result.columns.length === 1 ? rows : [result.columns.join('\t'), ...rows]).join('\n');
+    }
+    case 'configuration':
+      return [
+        metaText(result.meta),
+        `Selected: ${result.selected.join(', ')}`,
+        result.deselected ? `Deselected: ${result.deselected.join(', ')}` : '',
+      ]
+        .filter(Boolean)
+        .join('\n');
+    case 'configurations':
+      return result.configurations
+        .map((configuration) => {
+          const meta = metaText(configuration.meta);
+          return configuration.selected.join(', ') + (meta ? ` (${meta})` : '');
+        })
+        .join('\n');
+  }
+}
+
+/** Rows rendered at most; a larger result says how many are not shown. */
+export const MAX_RENDERED_ROWS = 500;
+
+function plural(count: number, noun: string): string {
+  return `${count} ${noun}${count === 1 ? '' : 's'}`;
+}
+
+function Count({ count, noun }: { count: number; noun: string }) {
+  return <p className="text-[11.5px] text-gray-500 dark:text-gray-400 mb-1">{plural(count, noun)}</p>;
+}
+
+function Truncated({ total }: { total: number }) {
+  if (total <= MAX_RENDERED_ROWS) return null;
+  return (
+    <p className="mt-1 text-[11.5px] italic text-gray-500 dark:text-gray-400">
+      … and {total - MAX_RENDERED_ROWS} more, not shown.
+    </p>
+  );
+}
+
+function FeatureChips({ names, muted = false }: { names: readonly string[]; muted?: boolean }) {
+  if (names.length === 0) {
+    return <span className="text-gray-400 italic">none</span>;
+  }
+  return (
+    <span className="inline-flex flex-wrap gap-1">
+      {names.map((name) => (
+        <span
+          key={name}
+          className={`px-1.5 rounded font-mono text-[11.5px] ${
+            muted
+              ? 'text-gray-400 dark:text-gray-500 line-through bg-black/[.03] dark:bg-white/[.04]'
+              : 'text-gray-800 dark:text-gray-100 bg-accent/10 dark:bg-accent/20'
+          }`}
+        >
+          {name}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+function Meta({ meta }: { meta?: Record<string, unknown> }) {
+  if (!meta || Object.keys(meta).length === 0) return null;
+  return (
+    <p className="text-gray-600 dark:text-gray-400">
+      {Object.entries(meta)
+        .map(([key, value]) => `${key}: ${formatCell(value)}`)
+        .join(' · ')}
+    </p>
+  );
 }
 
 /** Renders an OperationResult in the output panel. */
@@ -247,50 +345,86 @@ export function OperationResultView({ result }: { result: OperationResult }) {
     case 'json':
       return <pre className="font-mono whitespace-pre-wrap">{JSON.stringify(result.value, null, 2)}</pre>;
     case 'table':
+      if (result.rows.length === 0) {
+        return <p className="text-gray-400 italic">No results.</p>;
+      }
+      if (result.columns.length === 1) {
+        // A plain list (core features, atomic sets, ...): its column is the result's title.
+        return (
+          <div className="text-[12.5px]">
+            <Count count={result.rows.length} noun="result" />
+            <FeatureChips names={result.rows.slice(0, MAX_RENDERED_ROWS).map((row) => formatCell(row[0]))} />
+            <Truncated total={result.rows.length} />
+          </div>
+        );
+      }
       return (
-        <table className="text-[12.5px] border-collapse">
-          <thead>
-            <tr>
-              {result.columns.map((column) => (
-                <th key={column} className="text-left font-semibold px-2 py-1 border-b border-black/10 dark:border-white/10">
-                  {column}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {result.rows.map((row, index) => (
-              <tr key={index} className="odd:bg-black/[.02] dark:odd:bg-white/[.03]">
-                {row.map((cell, column) => (
-                  <td key={column} className="px-2 py-0.5 font-mono">
-                    {formatCell(cell)}
-                  </td>
+        <div className="text-[12.5px]">
+          <Count count={result.rows.length} noun="result" />
+          <table className="border-collapse">
+            <thead>
+              <tr>
+                {result.columns.map((column) => (
+                  <th key={column} className="text-left font-semibold px-2 py-1 border-b border-black/10 dark:border-white/10">
+                    {column}
+                  </th>
                 ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {result.rows.slice(0, MAX_RENDERED_ROWS).map((row, index) => (
+                <tr key={index} className="odd:bg-black/[.02] dark:odd:bg-white/[.03]">
+                  {row.map((cell, column) => (
+                    // Long values (lists, documentation) stay on one line; hover shows them whole.
+                    <td key={column} title={formatCell(cell)} className="px-2 py-0.5 font-mono align-top max-w-sm truncate">
+                      {formatCell(cell)}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <Truncated total={result.rows.length} />
+        </div>
       );
     case 'configuration':
       return (
         <div className="space-y-1.5 text-[12.5px]">
-          {result.meta && Object.keys(result.meta).length > 0 && (
-            <p className="text-gray-600 dark:text-gray-400">
-              {Object.entries(result.meta)
-                .map(([key, value]) => `${key}: ${formatCell(value)}`)
-                .join(' · ')}
-            </p>
-          )}
-          <p>
-            <span className="font-semibold">Selected ({result.selected.length}): </span>
-            <span className="font-mono">{result.selected.join(', ') || '—'}</span>
+          <Meta meta={result.meta} />
+          <p className="flex items-baseline gap-2">
+            <span className="font-semibold shrink-0">Selected ({result.selected.length})</span>
+            <FeatureChips names={result.selected} />
           </p>
           {result.deselected && (
-            <p>
-              <span className="font-semibold">Deselected ({result.deselected.length}): </span>
-              <span className="font-mono">{result.deselected.join(', ') || '—'}</span>
+            <p className="flex items-baseline gap-2">
+              <span className="font-semibold shrink-0">Deselected ({result.deselected.length})</span>
+              <FeatureChips names={result.deselected} muted />
             </p>
           )}
+        </div>
+      );
+    case 'configurations':
+      if (result.configurations.length === 0) {
+        return <p className="text-gray-400 italic">No configurations.</p>;
+      }
+      return (
+        <div className="text-[12.5px]">
+          <Count count={result.configurations.length} noun="configuration" />
+          <ol className="divide-y divide-black/5 dark:divide-white/5">
+            {result.configurations.slice(0, MAX_RENDERED_ROWS).map((configuration, index) => (
+              <li key={index} className="flex items-baseline gap-2 py-1">
+                <span className="w-8 shrink-0 text-right font-mono text-[11.5px] text-gray-400">#{index + 1}</span>
+                <span className="flex-1 space-y-0.5">
+                  <FeatureChips names={configuration.selected} />
+                  <Meta meta={configuration.meta} />
+                </span>
+                <span className="shrink-0 text-[11.5px] text-gray-400" title="Selected features">
+                  {configuration.selected.length}
+                </span>
+              </li>
+            ))}
+          </ol>
+          <Truncated total={result.configurations.length} />
         </div>
       );
   }
