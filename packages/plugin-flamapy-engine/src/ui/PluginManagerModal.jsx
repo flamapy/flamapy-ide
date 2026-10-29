@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 // Direct file import: the web-ui barrel pulls monaco (untestable in node).
 import Modal from "@flamapy/web-ui/src/ui/Modal.jsx";
 
-// Manage the analysis plugins (solver backends) available in the IDE. Lists the
+// Manage the flamapy plugins (Python solver backends) available in the IDE. Lists the
 // installed backends, the curated official extras from plugins.registry.json (each
 // installable when a Pyodide/wasm wheel exists), and an "install from URL" field for
 // any third-party plugin wheel. Installing calls onInstall({ wheelRefs,
@@ -42,10 +42,11 @@ function PluginManagerModal({ installedBackends, onInstall, onClose }) {
   }
 
   return (
-    <Modal onClose={onClose} title="Manage plugins" maxWidth="max-w-lg">
+    <Modal onClose={onClose} title="flamapy plugins" maxWidth="max-w-lg">
       <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-        Solver backends run analyses in your browser. Install an official extra or any
-        third-party plugin wheel; its operations appear as a new solver tab.
+        flamapy plugins are Python packages that add solver backends and analysis
+        operations to flamapy, which runs in your browser. Install an official extra or
+        any third-party plugin wheel; its operations appear as a new solver tab.
       </p>
 
       <div className="mb-5">

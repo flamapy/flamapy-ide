@@ -1,6 +1,6 @@
 /* eslint-disable react/prop-types */
 
-// Generic segmented control (VSCode/featuredraw style): a pill group where the
+// Generic segmented control (VSCode style): a pill group where the
 // active option gets a raised white chip. Used for the solver picker and any
 // other inline toggle. `options` is [{ value, label, title? }].
 function Segmented({ value, onChange, options, className = "" }) {

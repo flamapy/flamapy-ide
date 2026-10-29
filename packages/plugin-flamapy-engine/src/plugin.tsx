@@ -1,4 +1,4 @@
-import type { FlamapyPlugin, Marker, PluginContext } from '@flamapy/plugin-api';
+import type { FlamapyPlugin, Marker, PluginContext } from '@flamapy/ide-plugin-api';
 import { createElement } from 'react';
 
 import { createAnalysisService } from './analysisService';
@@ -44,6 +44,12 @@ export const flamapyEnginePlugin: FlamapyPlugin = {
     id: 'flamapy.engine',
     name: 'Flamapy Analysis Engine',
     version: '3.0.0',
+    description:
+      'Runs flamapy in your browser (or on a flamapy REST server): validates the model, runs the analysis operations of every installed flamapy plugin and manages solver backends.',
+    authors: [{ name: 'flamapy team', url: 'https://flamapy.github.io' }],
+    repository: 'https://github.com/flamapy/flamapy-ide',
+    homepage: 'https://flamapy.github.io',
+    license: 'LGPL-3.0',
   },
 
   activate(ctx: PluginContext): void {

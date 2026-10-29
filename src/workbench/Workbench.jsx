@@ -9,7 +9,7 @@ import ActivityBar from "../components/layout/ActivityBar";
 import EditorTabs from "../components/layout/EditorTabs";
 import BottomPanel from "../components/layout/BottomPanel";
 import StatusBar from "../components/layout/StatusBar";
-import { UVLEditor, OperationInputModal } from "@flamapy/web-ui";
+import { UVLEditor } from "@flamapy/web-ui";
 import {
   WASM,
   REST,
@@ -24,20 +24,15 @@ import {
 } from "@flamapy/plugin-flamapy-engine";
 import { START_OPTIMIZATION } from "@flamapy/plugin-view-charts";
 import { CONFIGURATOR_VIEW_ID } from "@flamapy/plugin-configurator";
-import { createWorkbench } from "./createWorkbench";
+import { createWorkbench } from "@flamapy/ide-plugin-api";
 import { builtinPlugins } from "./builtinPlugins";
 import { useContributionStore } from "./useContributionStore";
 import { useEngine } from "./useEngine";
 import { useShareLinks } from "./useShareLinks";
-import {
-  addRemotePlugin,
-  forgetRemotePlugin,
-  loadRememberedRemotePlugins,
-  remotePluginUrls,
-  remotePluginsEnabled,
-  setRemotePluginsEnabled,
-} from "./remotePlugins";
-import RemotePluginsModal from "./RemotePluginsModal";
+import { loadRememberedRemotePlugins, pluginEnablement } from "./remotePlugins";
+import { createPluginsView, PLUGINS_VIEW_ID } from "./PluginsView";
+import { withContributedItems } from "./menuContributions";
+import { OperationForm, OperationResultView, needsAttributes, needsFeatures } from "./OperationUi";
 import { useCollabSession } from "./useCollabSession";
 import { ToolbarMenuSlot } from "./slots/ToolbarMenuSlot";
 import { StatusBarSlot } from "./slots/StatusBarSlot";
@@ -62,7 +57,18 @@ const EXPORT_OPERATIONS = [
 function Workbench({ selectedFile, darkMode, toggleDark }) {
   const workbenchRef = useRef(null);
   if (!workbenchRef.current) {
-    workbenchRef.current = createWorkbench("");
+    const created = createWorkbench("", { host: { enablement: pluginEnablement } });
+    // The shell's own Plugins view: a tab only while open (activity bar puzzle icon).
+    created.stores.views.register({
+      id: PLUGINS_VIEW_ID,
+      title: "Plugins",
+      dynamic: true,
+      order: 1000,
+      component: createPluginsView(created, {
+        onManageFlamapyPlugins: () => created.shell.commands.execute(OPEN_PLUGIN_MANAGER),
+      }),
+    });
+    workbenchRef.current = created;
   }
   const workbench = workbenchRef.current;
 
@@ -83,8 +89,10 @@ function Workbench({ selectedFile, darkMode, toggleDark }) {
   const [modelInfoOpen, setModelInfoOpen] = useState(true);
   const [panelTab, setPanelTab] = useState("output");
 
-  // Operation-argument modal state ({ action, options } while open, else null)
+  // Operation input form ({ title, inputs, choices, resolve } while open, else null)
   const [inputModal, setInputModal] = useState(null);
+  // AbortController of the plugin operation running now (Stop aborts it).
+  const pluginRunRef = useRef(null);
 
   const [pluginModals, setPluginModals] = useState([]);
   const nextModalKeyRef = useRef(0);
@@ -126,14 +134,6 @@ function Workbench({ selectedFile, darkMode, toggleDark }) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // Remote-plugins settings modal (experimental loader).
-  const [remoteModalState, setRemoteModalState] = useState(null);
-  const openRemotePlugins = useCallback(() => {
-    setRemoteModalState({ enabled: remotePluginsEnabled(), urls: remotePluginUrls() });
-  }, []);
-  const refreshRemoteModal = () =>
-    setRemoteModalState({ enabled: remotePluginsEnabled(), urls: remotePluginUrls() });
 
   const engine = useEngine(workbench);
   const { isLoaded, pluginCatalog, validation, restApiUrl, selectedSolver } = engine;
@@ -233,6 +233,34 @@ function Workbench({ selectedFile, darkMode, toggleDark }) {
     [pluginCatalog, selectedSolver]
   );
 
+  // Items plugins added to the built-in menus, listed after the built-in ones under the
+  // contributing plugin's name.
+  const contributedItems = useContributionStore(workbench.stores.menuItems);
+  const contributedOperations = useContributionStore(workbench.stores.operations);
+  const menuItems = useMemo(
+    () => [
+      ...contributedItems,
+      ...contributedOperations.map((operation) => ({ ...operation, operation })),
+    ],
+    [contributedItems, contributedOperations]
+  );
+  const pluginName = useCallback(
+    (pluginId) => workbench.host.get(pluginId)?.plugin.manifest.name ?? pluginId ?? "Plugins",
+    [workbench]
+  );
+  const structuralMenu = useMemo(
+    () => withContributedItems(structuralOptions, menuItems, "structural", { pluginName }),
+    [structuralOptions, menuItems, pluginName]
+  );
+  const analysisMenu = useMemo(
+    () => withContributedItems(analysisOptions, menuItems, "analysis", { pluginName, selectedSolver }),
+    [analysisOptions, menuItems, pluginName, selectedSolver]
+  );
+  const exportMenu = useMemo(
+    () => withContributedItems(EXPORT_OPERATIONS, menuItems, "export", { pluginName }),
+    [menuItems, pluginName]
+  );
+
   const setSelectedSolver = useCallback(
     (solver) => engine.services?.analysis.setSelectedSolver(solver),
     [engine.services]
@@ -327,6 +355,83 @@ function Workbench({ selectedFile, darkMode, toggleDark }) {
     }
   }
 
+  // A plugin's menu item runs its own handler; a plugin operation runs through the
+  // shell (inputs form, progress, Stop, result). Errors land in the output panel.
+  function orContributed(handler) {
+    return async (action) => {
+      const item = action.contributedItem;
+      if (!item) return handler(action);
+      if (item.operation) return runContributedOperation(item.operation);
+      try {
+        await item.run();
+      } catch (error) {
+        setOutput({ label: item.label, result: `Error: ${error?.message ?? error}` });
+      }
+    };
+  }
+
+  // Shows the input form for `inputs` (feature/attribute pickers filled from the model)
+  // and resolves with the typed args, or null when cancelled.
+  async function collectInputs(title, inputs) {
+    const choices = { features: [], attributes: [] };
+    try {
+      if (needsFeatures(inputs)) choices.features = (await call("getFeatures")) ?? [];
+      if (needsAttributes(inputs)) choices.attributes = (await call("getNumericalAttributes")) ?? [];
+    } catch (error) {
+      setOutput({ label: title, result: error.message });
+      return null;
+    }
+    return new Promise((resolve) => setInputModal({ title, inputs, choices, resolve }));
+  }
+
+  function closeInputModal(args) {
+    inputModal?.resolve(args);
+    setInputModal(null);
+  }
+
+  async function runContributedOperation(operation) {
+    if (!isLoaded || isRunning) return;
+    if (operation.requiresValidModel !== false) {
+      const currentValidation = await ensureValidated();
+      if (!currentValidation?.valid) {
+        setOutput({ label: operation.label, result: "Error: the model is not valid. Fix syntax errors and retry." });
+        return;
+      }
+    }
+    let args = {};
+    if (operation.inputs?.length) {
+      args = await collectInputs(operation.label, operation.inputs);
+      if (!args) return;
+    }
+    const controller = new AbortController();
+    pluginRunRef.current = controller;
+    setIsRunning(true);
+    setOutput({ label: operation.label, result: "Running…" });
+    const progress = ({ message, fraction }) => {
+      if (controller.signal.aborted) return;
+      const percent = fraction === undefined ? "" : ` (${Math.round(fraction * 100)}%)`;
+      setOutput({ label: operation.label, result: `${message ?? "Running…"}${percent}` });
+    };
+    try {
+      const result = await operation.run(args, { signal: controller.signal, progress });
+      if (controller.signal.aborted) {
+        setOutput({ label: operation.label, result: "Operation stopped." });
+      } else if (result) {
+        setOutput({ label: operation.label, result: "", view: <OperationResultView result={result} /> });
+      } else {
+        setOutput({ label: operation.label, result: "Done." });
+      }
+    } catch (error) {
+      setOutput({
+        label: operation.label,
+        result: controller.signal.aborted ? "Operation stopped." : `Error: ${error?.message ?? error}`,
+      });
+    } finally {
+      pluginRunRef.current = null;
+      setIsRunning(false);
+    }
+  }
+
   async function executeAction(action) {
     if (!isLoaded) return;
     const currentValidation = await ensureValidated();
@@ -342,18 +447,11 @@ function Workbench({ selectedFile, darkMode, toggleDark }) {
       return;
     }
 
-    if (action.input) {
-      // Operation needs an extra argument: collect it via a modal, then run.
-      let options = [];
-      if (action.input.kind === "feature") {
-        try {
-          options = await call("getFeatures");
-        } catch (error) {
-          setOutput({ label: action.label, result: error.message });
-          return;
-        }
-      }
-      setInputModal({ action, options });
+    if (action.inputs?.length) {
+      // The operation takes arguments: collect them with the input form, then run.
+      const args = await collectInputs(action.label, action.inputs);
+      if (!args) return;
+      runOperation({ ...action, args: { ...(action.args || {}), ...args } });
       return;
     }
 
@@ -373,13 +471,13 @@ function Workbench({ selectedFile, darkMode, toggleDark }) {
     setIsRunning(false);
   }
 
-  function confirmInputOperation(value) {
-    const { action } = inputModal;
-    setInputModal(null);
-    runOperation({ ...action, args: { ...(action.args || {}), [action.input.arg]: value } });
-  }
-
   function interruptExecution() {
+    // A plugin operation: abort its signal (the plugin stops its own work).
+    if (pluginRunRef.current) {
+      pluginRunRef.current.abort();
+      setOutput({ label: "Execution interrupted", result: "Stopping the running operation…" });
+      return;
+    }
     if (!isLoaded || !engine.services) return;
     const { worker } = engine.services;
     // Fast path: raise KeyboardInterrupt inside the running Python operation
@@ -442,21 +540,21 @@ function Workbench({ selectedFile, darkMode, toggleDark }) {
       <TitleBar darkMode={darkMode} toggleDark={toggleDark} />
 
       <ActionToolbar
-        structuralOptions={structuralOptions}
-        executeAction={executeAction}
+        structuralOptions={structuralMenu}
+        executeAction={orContributed(executeAction)}
         solverOptions={solverOptions}
         selectedSolver={selectedSolver}
         setSelectedSolver={setSelectedSolver}
-        analysisOptions={analysisOptions}
-        exportOptions={EXPORT_OPERATIONS}
-        downloadFile={downloadFile}
+        analysisOptions={analysisMenu}
+        exportOptions={exportMenu}
+        downloadFile={orContributed(downloadFile)}
         onShareLink={shareLinks.handleCopyModelLink}
         shareMessage={shareLinks.shareMessage}
         onUvlhub={shareLinks.handleSaveToUVLHub}
         uvlhubMessage={shareLinks.uvlhubMessage}
         collab={collab}
       >
-        <ToolbarMenuSlot store={workbench.stores.toolbarMenus} />
+        <ToolbarMenuSlot store={workbench.stores.toolbarMenus} pluginName={pluginName} />
       </ActionToolbar>
 
       <div className="flex flex-1 overflow-hidden">
@@ -466,8 +564,8 @@ function Workbench({ selectedFile, darkMode, toggleDark }) {
           modelInfoOpen={modelInfoOpen}
           onToggleModelInfo={() => setModelInfoOpen((o) => !o)}
           onOpenBackend={() => workbench.shell.commands.execute(OPEN_BACKEND_SETTINGS)}
-          onOpenPlugins={() => workbench.shell.commands.execute(OPEN_PLUGIN_MANAGER)}
-          onOpenRemotePlugins={openRemotePlugins}
+          pluginsOpen={currentView === PLUGINS_VIEW_ID}
+          onOpenPlugins={() => workbench.shell.views.open(PLUGINS_VIEW_ID)}
         />
 
         <SidebarSlot
@@ -530,32 +628,13 @@ function Workbench({ selectedFile, darkMode, toggleDark }) {
 
       <ModalOutlet modals={pluginModals} onClose={closePluginModal} />
 
-      {remoteModalState && (
-        <RemotePluginsModal
-          enabled={remoteModalState.enabled}
-          urls={remoteModalState.urls}
-          onToggle={(enabled) => {
-            setRemotePluginsEnabled(enabled);
-            refreshRemoteModal();
-          }}
-          onAdd={async (url) => {
-            await addRemotePlugin(workbench, url);
-            refreshRemoteModal();
-          }}
-          onRemove={(url) => {
-            forgetRemotePlugin(url);
-            refreshRemoteModal();
-          }}
-          onClose={() => setRemoteModalState(null)}
-        />
-      )}
-
       {inputModal && (
-        <OperationInputModal
-          action={inputModal.action}
-          options={inputModal.options}
-          onConfirm={confirmInputOperation}
-          onCancel={() => setInputModal(null)}
+        <OperationForm
+          title={inputModal.title}
+          inputs={inputModal.inputs}
+          choices={inputModal.choices}
+          onSubmit={(args) => closeInputModal(args)}
+          onCancel={() => closeInputModal(null)}
         />
       )}
     </div>

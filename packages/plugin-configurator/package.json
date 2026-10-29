@@ -6,7 +6,7 @@
   "main": "src/index.ts",
   "description": "Interactive configuration plugin: the wizard view, the configuration tree sidebar with its operations, and the configurator ZIP download.",
   "dependencies": {
-    "@flamapy/plugin-api": "*",
+    "@flamapy/ide-plugin-api": "*",
     "@flamapy/plugin-flamapy-engine": "*",
     "@flamapy/web-ui": "*",
     "file-saver": "^2.0.5",

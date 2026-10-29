@@ -1,5 +1,9 @@
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { SHARED_MODULES } from "./packages/ide-plugin-api/src/version.ts";
+
+const pluginApiSource = fileURLToPath(new URL("./packages/ide-plugin-api/src", import.meta.url));
 
 // Cross-origin isolation enables SharedArrayBuffer, which the IDE uses to
 // interrupt a running Pyodide operation without reloading the whole runtime.
@@ -16,6 +20,20 @@ const crossOriginIsolationHeaders = {
 export default defineConfig({
   base: process.env.VITE_BASE_PATH || "/",
   plugins: [react(), rawEndpointPlugin(), sharedImportMapPlugin()],
+  resolve: {
+    // One React for the shell and every package plugin, guaranteed rather than left to
+    // the resolver (a second copy breaks hooks). Remote plugins get the same instance
+    // through the import map below.
+    dedupe: ["react", "react-dom"],
+    // The workspace builds @flamapy/ide-plugin-api from source; its package.json points at
+    // dist/ for consumers of the published package.
+    alias: [
+      {
+        find: /^@flamapy\/ide-plugin-api(\/testing)?$/,
+        replacement: `${pluginApiSource}$1/index.ts`,
+      },
+    ],
+  },
   optimizeDeps: {
     exclude: ["pyodide"],
   },
@@ -23,9 +41,9 @@ export default defineConfig({
   preview: { headers: crossOriginIsolationHeaders },
 });
 
-// Injects the import map that resolves react / react-dom / react/jsx-runtime /
-// @flamapy/plugin-api to the shared-module shims in public/shared/, so remotely loaded
-// ESM plugins (built with those four as externals) share the shell's module instances.
+// Injects the import map that resolves every SHARED_MODULES specifier (react, react-dom,
+// react/jsx-runtime, @flamapy/ide-plugin-api) to its shim in public/shared/, so remotely
+// loaded ESM plugins (built with those as externals) share the shell's module instances.
 // The shell bundle itself is unaffected: Vite resolves its bare imports at build time.
 function sharedImportMapPlugin() {
   return {
@@ -33,12 +51,12 @@ function sharedImportMapPlugin() {
     transformIndexHtml() {
       const base = process.env.VITE_BASE_PATH || "/";
       const importMap = {
-        imports: {
-          react: `${base}shared/react.js`,
-          "react-dom": `${base}shared/react-dom.js`,
-          "react/jsx-runtime": `${base}shared/react-jsx-runtime.js`,
-          "@flamapy/plugin-api": `${base}shared/flamapy-plugin-api.js`,
-        },
+        imports: Object.fromEntries(
+          Object.keys(SHARED_MODULES).map((specifier) => [
+            specifier,
+            `${base}shared/${sharedShimFile(specifier)}`,
+          ]),
+        ),
       };
       return [
         {
@@ -50,6 +68,11 @@ function sharedImportMapPlugin() {
       ];
     },
   };
+}
+
+// '@flamapy/ide-plugin-api' -> 'flamapy-ide-plugin-api.js', 'react/jsx-runtime' -> 'react-jsx-runtime.js'.
+function sharedShimFile(specifier) {
+  return `${specifier.replace(/^@/, "").replaceAll("/", "-")}.js`;
 }
 
 // Mirrors the nginx /raw location: decodes ?model= (base64 UTF-8) and returns

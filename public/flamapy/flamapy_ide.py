@@ -152,17 +152,57 @@ def _humanize_operation(name: str) -> str:
 
 
 def _input_kind(inp) -> str:
-    """Map a framework Input to a UI input kind: 'integer', 'feature', or 'scalar'.
+    """Map a framework Input to the IDE's InputSpec kind (see @flamapy/ide-plugin-api).
 
-    The framework does not tag an input as "a feature name", so it is inferred from
-    the type (int -> integer) and a name convention; the IDE only needs this to pick
-    a number field vs a feature picker, and unknown inputs fall back to a text field.
+    The framework does not tag an input as "a feature name", so features are inferred
+    from a name convention; everything else follows the Python type. Unknown types fall
+    back to a text field.
     """
+    import typing
+
+    origin = typing.get_origin(inp.type) or inp.type
+    names_feature = (
+        inp.name.endswith("_name") or inp.name.endswith("_names")
+        or "feature" in inp.name or inp.name in ("variable", "variables")
+    )
+    if inp.type is bool:
+        return "boolean"
     if inp.type is int:
         return "integer"
-    if inp.name.endswith("_name") or inp.name in ("feature", "variable"):
+    if inp.type is float:
+        return "number"
+    if origin in (list, tuple, set, frozenset):
+        return "features" if names_feature else "string"
+    if names_feature:
         return "feature"
-    return "scalar"
+    return "string"
+
+
+def _json_safe(value):
+    """Plain JSON data for a facade result: containers recursed, other objects as str."""
+    if value is None or isinstance(value, (bool, int, str)):
+        return value
+    if isinstance(value, float):
+        return value if math.isfinite(value) else str(value)
+    if isinstance(value, dict):
+        return {str(k): _json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple, set, frozenset)):
+        return [_json_safe(v) for v in value]
+    return str(value)
+
+
+def _input_spec(inp) -> dict:
+    """One InputSpec for the IDE's input form, from a framework Input."""
+    spec = {
+        "name": inp.name,
+        "kind": _input_kind(inp),
+        "label": _humanize_operation(inp.name),
+        "required": bool(inp.required),
+    }
+    default = _json_safe(inp.default)
+    if default is not None and not isinstance(default, (list, dict)):
+        spec["default"] = default
+    return spec
 
 
 def _catalog_from_discovery(dm: DiscoverMetamodels) -> dict:
@@ -172,7 +212,8 @@ def _catalog_from_discovery(dm: DiscoverMetamodels) -> dict:
     backend tokens that implement it (derived, since the descriptor's ``backends``
     field is not populated in flamapy 2.6). Only analysis operations ('operation'
     kind, no configuration input) are included; producers, transformers and
-    configuration-driven operations are surfaced through their own dedicated UI.
+    configuration-driven operations are surfaced through their own dedicated UI. Operations
+    taking a file input are left out too: a server path means nothing in the browser.
     """
     plugins: dict[str, dict] = {}   # backend token -> {name, extension}
     operations = []
@@ -189,7 +230,7 @@ def _catalog_from_discovery(dm: DiscoverMetamodels) -> dict:
     for name, descriptor in dm.available_operations().items():
         if descriptor.kind != 'operation':
             continue
-        if any(inp.kind == 'configuration' for inp in descriptor.inputs):
+        if any(inp.kind in ('configuration', 'file') for inp in descriptor.inputs):
             continue
 
         backends = []
@@ -209,14 +250,8 @@ def _catalog_from_discovery(dm: DiscoverMetamodels) -> dict:
             "structural": len(backends) == 0,
             "backends": backends,
             "selectableBackend": bool(descriptor.selectable_backend),
-            "inputs": [
-                {
-                    "name": inp.name,
-                    "kind": _input_kind(inp),
-                    "required": bool(inp.required),
-                }
-                for inp in descriptor.inputs
-            ],
+            "inputs": [_input_spec(inp) for inp in descriptor.inputs],
+            "doc": (descriptor.doc or "").strip(),
         })
 
     catalog_plugins = [
@@ -289,18 +324,25 @@ def _serialize_facade_result(result):
     return json.dumps(str(result))
 
 
-def execute_facade_operation(name: str, args_json: str = "{}"):
+def execute_facade_operation(name: str, args_json: str = "{}", with_data: bool = False):
     """Run any FLAMAFeatureModel facade method by name and JSON-serialize its result.
 
     ``args_json`` is a JSON object whose keys are forwarded as keyword arguments
     (e.g. {"backend": "sat"}). The facade hides backend selection and result
     post-processing, so this single dispatcher replaces the per-backend routing.
+
+    With ``with_data`` the result is ``{"display": <as without>, "data": <the raw
+    result as plain JSON>}``, so IDE plugins get structured results, not display text.
     """
     args = json.loads(args_json) if args_json else {}
     method = getattr(fm, name, None)
     if not callable(method):
         return json.dumps("Unknown operation '{}'.".format(name))
-    return _serialize_facade_result(method(**args))
+    result = method(**args)
+    display = _serialize_facade_result(result)
+    if not with_data:
+        return display
+    return json.dumps({"display": json.loads(display), "data": _json_safe(result)})
 
 
 def execute_facade_operation_with_config(

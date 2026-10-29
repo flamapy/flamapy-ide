@@ -7,7 +7,6 @@ export { default as Question } from "./Question";
 export { default as Wizard } from "./Wizard";
 export { default as Information } from "./Information";
 export { default as Toolbar } from "./Toolbar";
-export { default as OperationInputModal } from "./OperationInputModal";
 export { default as ExecutionOutput } from "./ExecutionOutput";
 export { default as FeatureInclusionProbabilitiesChart } from "./FeatureInclusionProbabilitiesChart";
 export { default as ProductDistributionChart } from "./ProductDistributionChart";

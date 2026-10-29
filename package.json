@@ -13,7 +13,6 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@flamapy/plugin-featuredraw": "file:../featuredraw",
     "@monaco-editor/react": "^4.6.0",
     "chart.js": "^4.4.0",
     "d3": "^7.9.0",

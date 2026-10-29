@@ -82,7 +82,10 @@ function BottomPanel({
               {output.label}
             </div>
             <div className="font-mono text-[12.5px] mt-1 overflow-auto flex-1 text-gray-700 dark:text-gray-300">
-              {output.result == null ||
+              {output.view ? (
+                // A structured result (table, configuration, ...) rendered by the shell.
+                <div className="font-sans">{output.view}</div>
+              ) : output.result == null ||
               (Array.isArray(output.result) && output.result.length === 0) ? (
                 <div className="text-gray-400 italic">There are no {output.label}.</div>
               ) : Array.isArray(output.result) ? (

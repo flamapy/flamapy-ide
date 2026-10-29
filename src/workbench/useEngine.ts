@@ -12,7 +12,7 @@ import {
   type ValidationResult,
 } from '@flamapy/plugin-flamapy-engine';
 
-import type { Workbench } from './createWorkbench';
+import type { Workbench } from '@flamapy/ide-plugin-api';
 
 export interface EngineServices {
   worker: EngineWorkerService;

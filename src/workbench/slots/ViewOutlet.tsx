@@ -1,4 +1,4 @@
-import type { ContributionStore, ViewDescriptor } from '@flamapy/plugin-api';
+import type { ContributionStore, ViewDescriptor } from '@flamapy/ide-plugin-api';
 
 // @ts-expect-error untyped JSX (shell component)
 import ErrorBoundary from '../../components/ErrorBoundary';

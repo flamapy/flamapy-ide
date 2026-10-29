@@ -35,7 +35,7 @@ describe('remote plugin loader', () => {
 
   it('loads a data-URL module that satisfies the contract', async () => {
     const source = `export default {
-      manifest: { id: 'remote.hello', name: 'Hello', version: '1.0.0' },
+      manifest: { id: 'remote.hello', name: 'Hello', version: '1.0.0', engines: { pluginApi: '^1.0.0' } },
       activate() {},
     }`;
     const url = `data:text/javascript;base64,${btoa(source)}`;
@@ -47,6 +47,17 @@ describe('remote plugin loader', () => {
     const url = `data:text/javascript;base64,${btoa('export const x = 1')}`;
     await expect(loadRemotePlugin(url, { enabled: true })).rejects.toThrow(
       /does not default-export/,
+    );
+  });
+
+  it('rejects a remote plugin that does not declare engines.pluginApi', async () => {
+    const source = `export default {
+      manifest: { id: 'remote.old', name: 'Old', version: '1.0.0' },
+      activate() {},
+    }`;
+    const url = `data:text/javascript;base64,${btoa(source)}`;
+    await expect(loadRemotePlugin(url, { enabled: true })).rejects.toThrow(
+      /'remote\.old' has an invalid manifest: engines\.pluginApi is required/,
     );
   });
 });

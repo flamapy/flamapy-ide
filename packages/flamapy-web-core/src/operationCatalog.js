@@ -17,9 +17,9 @@
 // operation surface is curated; only operations in OPERATION_UI show for them.
 const DEFAULT_BACKENDS = new Set(["sat", "bdd", "z3"]);
 
-// Presentation for the built-in operations, keyed by facade method name. `input`
-// mirrors the extra-argument contract executeAction expects:
-// { kind: "feature"|"integer", arg, prompt, min? }. Order here is menu order.
+// Presentation for the built-in operations, keyed by facade method name. `inputs` are
+// InputSpecs (see @flamapy/ide-plugin-api): the fields of the shell's input form. A
+// curated entry's inputs replace the ones the bridge derives. Order here is menu order.
 const OPERATION_UI = {
   // Structural (no backend, always available)
   metrics: { label: "Metrics" },
@@ -32,7 +32,7 @@ const OPERATION_UI = {
   estimated_number_of_configurations: { label: "Estimated configurations" },
   feature_ancestors: {
     label: "Feature ancestors",
-    input: { kind: "feature", arg: "feature_name", prompt: "Select a feature" },
+    inputs: [{ name: "feature_name", kind: "feature", label: "Select a feature", required: true }],
   },
 
   // Analysis (backend-implemented)
@@ -44,7 +44,7 @@ const OPERATION_UI = {
   false_optional_features: { label: "False optional features" },
   sampling: {
     label: "Sampling",
-    input: { kind: "integer", arg: "size", prompt: "Sample size", min: 1 },
+    inputs: [{ name: "size", kind: "integer", label: "Sample size", min: 1, default: 1, required: true }],
   },
   backbone: { label: "Backbone" },
   unique_features: { label: "Unique features" },
@@ -54,17 +54,21 @@ const OPERATION_UI = {
   variability: { label: "Variability" },
   configurations_with_n_features: {
     label: "Configurations with N features",
-    input: { kind: "integer", arg: "n", prompt: "Number of selected features", min: 0 },
+    inputs: [
+      { name: "n", kind: "integer", label: "Number of selected features", min: 0, default: 0, required: true },
+    ],
   },
   all_feature_bounds: { label: "Feature bounds (all)" },
   feature_bounds: {
     label: "Feature bounds",
-    input: { kind: "feature", arg: "variable_name", prompt: "Select a feature" },
+    inputs: [{ name: "variable_name", kind: "feature", label: "Select a feature", required: true }],
   },
   minimum_configuration: { label: "Minimum configuration" },
   t_wise_sampling: {
     label: "T-wise sampling",
-    input: { kind: "integer", arg: "t", prompt: "t (interaction strength)", min: 1 },
+    inputs: [
+      { name: "t", kind: "integer", label: "t (interaction strength)", min: 1, default: 1, required: true },
+    ],
   },
 };
 
@@ -100,30 +104,33 @@ function humanize(name) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-// Convert a catalog operation's inputs (0..1 used by the UI) into the singular
-// `input` object executeAction consumes. The curated `ui.input` wins; otherwise it
-// is derived best-effort from the descriptor (feature vs numeric argument).
-function inputFor(op, ui) {
-  if (ui?.input) return ui.input;
-  const first = op.inputs?.[0];
-  if (!first) return undefined;
-  return {
-    kind: first.kind === "feature" ? "feature" : "integer",
-    arg: first.name,
-    prompt: humanize(first.name),
-  };
+const INPUT_KINDS = new Set([
+  "integer", "number", "string", "boolean", "feature", "features", "attribute", "attributes", "enum",
+]);
+
+// The input form fields of a catalog operation: the curated ones, or every input the
+// bridge reports (an older bridge's "scalar" kind becomes a text field).
+function inputsFor(op, ui) {
+  if (ui?.inputs) return ui.inputs;
+  return (op.inputs || []).map((input) => ({
+    ...input,
+    kind: INPUT_KINDS.has(input.kind) ? input.kind : "string",
+    label: input.label ?? humanize(input.name),
+    required: Boolean(input.required),
+  }));
 }
 
 function toAction(op) {
   const ui = OPERATION_UI[op.method];
   const backends = op.backends || [];
-  const input = inputFor(op, ui);
+  const inputs = inputsFor(op, ui);
   return {
     method: op.method,
     label: ui?.label ?? op.label ?? humanize(op.method),
     backends,
     backendAware: backends.length > 1,
-    ...(input ? { input } : {}),
+    ...(op.doc ? { title: op.doc } : {}),
+    ...(inputs.length > 0 ? { inputs } : {}),
   };
 }
 

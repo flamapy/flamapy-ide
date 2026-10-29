@@ -6,7 +6,7 @@
   "main": "src/index.ts",
   "description": "Feature-model graph view plugin (react-d3-tree via @flamapy/web-ui).",
   "dependencies": {
-    "@flamapy/plugin-api": "*",
+    "@flamapy/ide-plugin-api": "*",
     "@flamapy/plugin-flamapy-engine": "*",
     "@flamapy/web-ui": "*"
   },

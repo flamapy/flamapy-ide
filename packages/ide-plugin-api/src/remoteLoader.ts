@@ -1,3 +1,4 @@
+import { validateManifest } from './manifest';
 import type { FlamapyPlugin } from './types';
 
 /**
@@ -5,10 +6,11 @@ import type { FlamapyPlugin } from './types';
  * this behind the `experimental.remotePlugins` setting; this module only implements the
  * mechanics.
  *
- * The contract for remote bundles: default-export a `{ manifest, activate }` object and
- * build with `react`, `react-dom`, `react/jsx-runtime` and `@flamapy/plugin-api` as
- * externals — the shell's import map resolves those to its own instances, so the bundle
- * never carries a second React copy.
+ * The contract for remote bundles: default-export a `{ manifest, activate }` object whose
+ * manifest declares `engines.pluginApi`, and build with the `SHARED_MODULES` specifiers
+ * (`react`, `react-dom`, `react/jsx-runtime`, `@flamapy/ide-plugin-api`) as externals — the
+ * shell's import map resolves those to its own instances, so the bundle never carries a
+ * second React copy. Relative imports (lazy chunks, assets) resolve against the bundle URL.
  */
 export function isValidRemotePluginModule(candidate: unknown): candidate is FlamapyPlugin {
   if (typeof candidate !== 'object' || candidate === null) {
@@ -44,6 +46,12 @@ export async function loadRemotePlugin(
   if (!isValidRemotePluginModule(module.default)) {
     throw new Error(
       `Remote module at ${url} does not default-export a { manifest, activate } plugin.`,
+    );
+  }
+  const problems = validateManifest(module.default.manifest, { remote: true });
+  if (problems.length > 0) {
+    throw new Error(
+      `Remote plugin '${module.default.manifest.id}' has an invalid manifest: ${problems.join('; ')}.`,
     );
   }
   return module.default;

@@ -1,19 +1,21 @@
-import {
-  PluginHost,
-  createContributionStore,
-  createServiceRegistry,
-  type ContributionStore,
-  type Disposable,
-  type DocumentStore,
-  type FileHandlerDescriptor,
-  type Marker,
-  type ServiceRegistry,
-  type ShellApi,
-  type SidebarPanelDescriptor,
-  type StatusBarItemDescriptor,
-  type ToolbarMenuDescriptor,
-  type ViewDescriptor,
-} from '@flamapy/plugin-api';
+import { createContributionStore, type ContributionStore } from '../contributions';
+import { PluginHost, type PluginHostOptions } from '../pluginHost';
+import { createServiceRegistry } from '../serviceRegistry';
+import type {
+  Contributed,
+  Disposable,
+  DocumentStore,
+  FileHandlerDescriptor,
+  Marker,
+  MenuItemDescriptor,
+  OperationContribution,
+  ServiceRegistry,
+  ShellApi,
+  SidebarPanelDescriptor,
+  StatusBarItemDescriptor,
+  ToolbarMenuDescriptor,
+  ViewDescriptor,
+} from '../types';
 import type { ReactNode } from 'react';
 
 import { createDocumentStore } from './documentStore';
@@ -40,7 +42,11 @@ export interface Workbench {
   stores: {
     views: ContributionStore<ViewDescriptor>;
     sidebarPanels: ContributionStore<SidebarPanelDescriptor>;
-    toolbarMenus: ContributionStore<ToolbarMenuDescriptor>;
+    toolbarMenus: ContributionStore<Contributed<ToolbarMenuDescriptor>>;
+    /** Items plugins added to the built-in toolbar menus. */
+    menuItems: ContributionStore<Contributed<MenuItemDescriptor>>;
+    /** Operations plugins added to the built-in toolbar menus. */
+    operations: ContributionStore<Contributed<OperationContribution>>;
     statusBarItems: ContributionStore<StatusBarItemDescriptor>;
   };
   problems: {
@@ -52,16 +58,30 @@ export interface Workbench {
     /** The handler claiming this extension, longest-extension match first. */
     forExtension(extension: string): FileHandlerDescriptor | undefined;
   };
+  commands: {
+    /** Ids of the currently registered commands. */
+    ids(): string[];
+  };
   notifyActiveViewChanged(id: string | null): void;
 }
 
-export function createWorkbench(initialText = ''): Workbench {
+/**
+ * The headless core of the IDE shell: the document, the contribution stores, the command
+ * bus and the plugin host, with no React. The IDE's `Workbench.jsx` renders it and fills
+ * in `delegates`; `@flamapy/ide-plugin-api/testing` drives the very same core in tests.
+ */
+export function createWorkbench(
+  initialText = '',
+  options: { host?: PluginHostOptions } = {},
+): Workbench {
   const documents = createDocumentStore(initialText);
   const services = createServiceRegistry();
 
   const views = createContributionStore<ViewDescriptor>();
   const sidebarPanels = createContributionStore<SidebarPanelDescriptor>();
-  const toolbarMenus = createContributionStore<ToolbarMenuDescriptor>();
+  const toolbarMenus = createContributionStore<Contributed<ToolbarMenuDescriptor>>();
+  const menuItems = createContributionStore<Contributed<MenuItemDescriptor>>();
+  const operations = createContributionStore<Contributed<OperationContribution>>();
   const statusBarItems = createContributionStore<StatusBarItemDescriptor>();
 
   const delegates: ShellDelegates = {
@@ -118,6 +138,12 @@ export function createWorkbench(initialText = ''): Workbench {
     toolbar: {
       registerMenu: (menu) => toolbarMenus.register(menu),
     },
+    menus: {
+      registerItem: (item) => menuItems.register(item),
+    },
+    operations: {
+      register: (operation) => operations.register(operation),
+    },
     statusBar: {
       registerItem: (item) => statusBarItems.register(item),
     },
@@ -166,7 +192,18 @@ export function createWorkbench(initialText = ''): Workbench {
     },
   };
 
-  const host = new PluginHost(shell, services);
+  // Each plugin gets the same shell, except that its menu contributions carry its id, so
+  // the toolbar can show which plugin added them.
+  const host = new PluginHost(
+    (pluginId) => ({
+      ...shell,
+      toolbar: { registerMenu: (menu) => toolbarMenus.register({ ...menu, pluginId }) },
+      menus: { registerItem: (item) => menuItems.register({ ...item, pluginId }) },
+      operations: { register: (operation) => operations.register({ ...operation, pluginId }) },
+    }),
+    services,
+    options.host,
+  );
 
   return {
     host,
@@ -174,7 +211,7 @@ export function createWorkbench(initialText = ''): Workbench {
     shell,
     documents,
     delegates,
-    stores: { views, sidebarPanels, toolbarMenus, statusBarItems },
+    stores: { views, sidebarPanels, toolbarMenus, menuItems, operations, statusBarItems },
     problems: {
       get: () => markersBySource,
       subscribe(listener) {
@@ -193,6 +230,9 @@ export function createWorkbench(initialText = ''): Workbench {
           )
           .sort((a, b) => b.length - a.length)[0]?.handler;
       },
+    },
+    commands: {
+      ids: () => [...commandHandlers.keys()],
     },
     notifyActiveViewChanged(id) {
       for (const listener of [...activeViewListeners]) {

@@ -7,7 +7,7 @@ import {
   saveBackend,
   saveRestUrl,
 } from '@flamapy/web-core';
-import type { Disposable, DocumentStore } from '@flamapy/plugin-api';
+import type { Disposable, DocumentStore } from '@flamapy/ide-plugin-api';
 
 import type {
   AnalysisService,
@@ -129,6 +129,23 @@ export function createAnalysisService(options: {
       const data = action.backendAware ? { ...action, args } : action;
       const response = (await worker.call('executeFacadeOperation', data)) as { result: string };
       return JSON.parse(response.result);
+    },
+
+    async runOperationData(action: OperationAction) {
+      if (computeBackend === REST) {
+        // The REST API returns the result itself: it is both what to show and the data.
+        const result = await this.runOperation(action);
+        return { display: result, data: result };
+      }
+      const args = action.backendAware
+        ? { ...(action.args || {}), backend: selectedSolver }
+        : action.args || {};
+      const response = (await worker.call('executeFacadeOperation', {
+        ...action,
+        args,
+        withData: true,
+      })) as { result: string };
+      return JSON.parse(response.result) as { display: unknown; data: unknown };
     },
 
     async runOperationWithConfig(action, configuration) {

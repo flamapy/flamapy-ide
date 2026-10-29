@@ -1,10 +1,9 @@
-import type { FlamapyPlugin } from '@flamapy/plugin-api';
+import type { FlamapyPlugin } from '@flamapy/ide-plugin-api';
 import { flamapyEnginePlugin } from '@flamapy/plugin-flamapy-engine';
 import { graphViewPlugin } from '@flamapy/plugin-view-graph';
 import { chartsViewPlugin } from '@flamapy/plugin-view-charts';
 import { flowMapViewPlugin } from '@flamapy/plugin-view-flowmap';
 import { configuratorPlugin } from '@flamapy/plugin-configurator';
-import { featuredrawPlugin } from '@flamapy/plugin-featuredraw';
 
 /**
  * First-party plugins compiled into the IDE, activated at workbench startup in
@@ -17,5 +16,4 @@ export const builtinPlugins: FlamapyPlugin[] = [
   chartsViewPlugin,
   flowMapViewPlugin,
   configuratorPlugin,
-  featuredrawPlugin,
 ];

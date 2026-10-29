@@ -1,11 +1,11 @@
-import type { Disposable, DocumentChange, DocumentStore } from '@flamapy/plugin-api';
+import type { Disposable, DocumentChange, DocumentStore } from '../types';
 
 /**
  * The shell-owned UVL document: the single source of truth for the model text.
  *
  * Monaco (the source view) writes with origin 'editor'; imports, share-link restores and
- * the featuredraw diagram write with their own origins so consumers can tell their echo
- * from foreign edits. Persistence to localStorage stays a caller concern (the shell
+ * plugins write with their own origins so consumers can tell their echo from foreign
+ * edits. Persistence to localStorage stays a caller concern (the shell
  * already persists on validation and collab sessions must not persist locally).
  */
 export function createDocumentStore(initialText = ''): DocumentStore {

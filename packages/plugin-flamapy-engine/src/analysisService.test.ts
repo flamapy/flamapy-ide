@@ -11,7 +11,7 @@ beforeEach(() => {
   });
 });
 
-import { createDocumentStore } from '../../../src/workbench/documentStore';
+import { createDocumentStore } from '@flamapy/ide-plugin-api';
 import { createAnalysisService } from './analysisService';
 import type { EngineWorkerService } from './services';
 

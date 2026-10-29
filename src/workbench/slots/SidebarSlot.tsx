@@ -1,4 +1,4 @@
-import type { ContributionStore, SidebarPanelDescriptor } from '@flamapy/plugin-api';
+import type { ContributionStore, SidebarPanelDescriptor } from '@flamapy/ide-plugin-api';
 
 import { useContributionStore } from '../useContributionStore';
 

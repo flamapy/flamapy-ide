@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { FlamapyPlugin, PluginContext } from '@flamapy/plugin-api';
+import type { FlamapyPlugin, PluginContext } from '@flamapy/ide-plugin-api';
 import {
   Analysis,
   validModelGate,
@@ -70,6 +70,12 @@ export const graphViewPlugin: FlamapyPlugin = {
     id: 'flamapy.view.graph.plugin',
     name: 'Feature Model Graph',
     version: '3.0.0',
+    description:
+      'Draws the feature tree and its cross-tree constraints as an interactive graph.',
+    authors: [{ name: 'flamapy team', url: 'https://flamapy.github.io' }],
+    repository: 'https://github.com/flamapy/flamapy-ide',
+    homepage: 'https://flamapy.github.io',
+    license: 'LGPL-3.0',
     dependencies: ['flamapy.engine'],
   },
   activate(ctx: PluginContext): void {

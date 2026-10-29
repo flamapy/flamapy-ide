@@ -1,4 +1,4 @@
-import type { ContributionStore, StatusBarItemDescriptor } from '@flamapy/plugin-api';
+import type { ContributionStore, StatusBarItemDescriptor } from '@flamapy/ide-plugin-api';
 
 import { useContributionStore } from '../useContributionStore';
 

@@ -15,17 +15,57 @@ export interface Disposable {
 }
 
 export interface PluginManifest {
-  /** Globally unique, stable id, e.g. `flamapy.engine` or `featuredraw`. */
+  /** Globally unique, stable id, e.g. `flamapy.engine` or `acme.my-tool`. */
   id: string;
   name: string;
   version: string;
   /** Plugin ids that must activate before this one. */
   dependencies?: string[];
   /**
-   * Reserved for remote plugins: the plugin-api version range the bundle was built
-   * against. Recorded but not yet enforced.
+   * The IDE plugin API semver range the plugin was built against, e.g. `'^1.0.0'`. The host
+   * marks a plugin whose range excludes `PLUGIN_API_VERSION` as `incompatible` instead
+   * of activating it. Required for remote plugins; built-in plugins are type-checked
+   * with the IDE and may omit it.
    */
   engines?: { pluginApi?: string };
+
+  // Attribution: shown wherever the IDE lists plugins, so the work behind a plugin is
+  // credited, linkable and citable. All optional; fill in what applies.
+
+  /** One or two sentences on what the plugin adds to the IDE. */
+  description?: string;
+  authors?: PluginAuthor[];
+  /** Source code URL (https), e.g. the GitHub repository. */
+  repository?: string;
+  /** Project or tool page (https), if it differs from the repository. */
+  homepage?: string;
+  /** SPDX license identifier, e.g. `MIT` or `LGPL-3.0-or-later`. */
+  license?: string;
+  /**
+   * The tool's logo, roughly square: an `https:` URL or a `data:` URI. Remote plugins can
+   * use `new URL('./logo.svg', import.meta.url).href`; bundled plugins can inline it.
+   */
+  logo?: string;
+  /** How to cite the work behind the plugin: a paper, or a software DOI. */
+  citation?: PluginCitation;
+}
+
+export interface PluginAuthor {
+  name: string;
+  affiliation?: string;
+  /** Personal or group page (https). */
+  url?: string;
+  /** ORCID iD, e.g. `0000-0002-1825-0097`. */
+  orcid?: string;
+}
+
+export interface PluginCitation {
+  /** Human-readable reference, e.g. `Doe, J. (2026). MyTool: ... In SPLC '26.` */
+  text: string;
+  /** Bare DOI, e.g. `10.1145/1234567.1234568`. */
+  doi?: string;
+  url?: string;
+  bibtex?: string;
 }
 
 export interface FlamapyPlugin {
@@ -78,7 +118,7 @@ export interface ServiceRegistry {
 export interface DocumentChange {
   text: string;
   version: number;
-  /** Who produced the change: 'editor', 'import', 'featuredraw', 'collab', ... */
+  /** Who produced the change: 'editor', 'import', 'collab', a plugin's id, ... */
   origin: string;
 }
 
@@ -139,6 +179,106 @@ export interface ToolbarMenuDescriptor {
   order?: number;
 }
 
+/** The built-in toolbar menus plugins can add items to. */
+export type ShellMenuId = 'structural' | 'analysis' | 'export';
+
+/**
+ * An item a plugin adds to one of the built-in toolbar menus. The shell lists plugin
+ * items after the built-in ones, under the contributing plugin's name.
+ */
+export interface MenuItemDescriptor {
+  /** Unique item id, e.g. `acme.tool.optimize`. */
+  id: string;
+  menu: ShellMenuId;
+  label: string;
+  /** Tooltip. */
+  title?: string;
+  run(): void | Promise<void>;
+  disabled?: boolean;
+  /** Sort order among this plugin's items; lower first. */
+  order?: number;
+  /**
+   * `analysis` menu only: show the item only while one of these solvers (backend tokens
+   * such as `sat`, `bdd`) is selected. Omitted: always shown.
+   */
+  backends?: string[];
+}
+
+// ---------------------------------------------------------------------------------
+// Operations
+// ---------------------------------------------------------------------------------
+
+interface InputBase {
+  /** Key of the value in the `args` passed to `run`. */
+  name: string;
+  /** Field label in the shell's input form. */
+  label: string;
+  /** Default: false (the form accepts an empty value). */
+  required?: boolean;
+}
+
+/**
+ * One input of an operation. The shell renders a form field per input: a number field,
+ * a text field, a checkbox, a feature or attribute picker (filled from the current
+ * model), or a choice list.
+ */
+export type InputSpec =
+  | (InputBase & { kind: 'integer' | 'number'; min?: number; max?: number; default?: number })
+  | (InputBase & { kind: 'string'; default?: string })
+  | (InputBase & { kind: 'boolean'; default?: boolean })
+  /** A feature of the model (`string`), or several (`string[]`). */
+  | (InputBase & { kind: 'feature' | 'features' })
+  /** A numerical attribute of the model (`string`), or several (`string[]`). */
+  | (InputBase & { kind: 'attribute' | 'attributes' })
+  | (InputBase & { kind: 'enum'; options: { value: string; label: string }[]; default?: string });
+
+/** What an operation hands back for the shell to show in the output panel. */
+export type OperationResult =
+  | { kind: 'text'; value: string }
+  | { kind: 'json'; value: unknown }
+  | { kind: 'table'; columns: string[]; rows: unknown[][] }
+  | {
+      kind: 'configuration';
+      selected: string[];
+      deselected?: string[];
+      /** Extra facts shown with it, e.g. `{ objective: 0.09 }`. */
+      meta?: Record<string, unknown>;
+    };
+
+export interface OperationRunContext {
+  /** Aborted when the user presses Stop. */
+  signal: AbortSignal;
+  /** Shown while the operation runs; `fraction` in [0, 1]. */
+  progress(update: { message?: string; fraction?: number }): void;
+}
+
+/**
+ * An operation a plugin adds to a built-in menu. Unlike a plain menu item, the shell runs
+ * it: checks the model is valid, collects `inputs` with its form, shows progress and the
+ * Stop button, and renders the result.
+ */
+export interface OperationContribution {
+  /** Unique id, e.g. `acme.tool.optimize`. */
+  id: string;
+  menu: ShellMenuId;
+  label: string;
+  /** Tooltip. */
+  title?: string;
+  order?: number;
+  /** `analysis` menu only: the solvers it is shown for (see `MenuItemDescriptor`). */
+  backends?: string[];
+  inputs?: InputSpec[];
+  /** Only run on a valid model. Default: true. */
+  requiresValidModel?: boolean;
+  run(
+    args: Record<string, unknown>,
+    ctx: OperationRunContext,
+  ): OperationResult | void | Promise<OperationResult | void>;
+}
+
+/** A contribution as the shell stores it: stamped with the contributing plugin's id. */
+export type Contributed<T> = T & { pluginId?: string };
+
 export interface StatusBarItemDescriptor {
   id: string;
   /** Rendered as-is in the status bar. */
@@ -174,7 +314,16 @@ export interface ShellApi {
     register(panel: SidebarPanelDescriptor): Disposable;
   };
   toolbar: {
+    /** A separate toolbar group of the plugin's own, after the built-in menus. */
     registerMenu(menu: ToolbarMenuDescriptor): Disposable;
+  };
+  menus: {
+    /** Add an item to a built-in toolbar menu (Structural, Analysis, Export). */
+    registerItem(item: MenuItemDescriptor): Disposable;
+  };
+  operations: {
+    /** Add an operation the shell runs (inputs form, progress, Stop, result) to a menu. */
+    register(operation: OperationContribution): Disposable;
   };
   statusBar: {
     registerItem(item: StatusBarItemDescriptor): Disposable;

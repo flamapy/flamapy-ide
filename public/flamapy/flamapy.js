@@ -132,8 +132,10 @@ process_uvl_file('uvlfile.uvl')
     this.requireValidModel();
     this.pyodide.globals.set("facade_method", action.method);
     this.pyodide.globals.set("facade_args", JSON.stringify(action.args || {}));
+    // withData: {display, data} instead of display text only (for IDE plugins).
+    this.pyodide.globals.set("facade_with_data", Boolean(action.withData));
     const result = await this.pyodide.runPythonAsync(
-      `execute_facade_operation(facade_method, facade_args)`
+      `execute_facade_operation(facade_method, facade_args, facade_with_data)`
     );
     return { label: action.label, result };
   }

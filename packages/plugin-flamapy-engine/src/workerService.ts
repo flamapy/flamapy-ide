@@ -3,7 +3,7 @@ import {
   installedBackends as backendsOf,
   type WorkerClient,
 } from '@flamapy/web-core';
-import type { Disposable } from '@flamapy/plugin-api';
+import type { Disposable } from '@flamapy/ide-plugin-api';
 
 import type {
   CatalogService,

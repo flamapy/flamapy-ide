@@ -1,5 +1,5 @@
 import { createElement, useState } from 'react';
-import type { Disposable, FlamapyPlugin, PluginContext } from '@flamapy/plugin-api';
+import type { Disposable, FlamapyPlugin, PluginContext } from '@flamapy/ide-plugin-api';
 import {
   Analysis,
   Catalog,
@@ -41,6 +41,12 @@ export const flowMapViewPlugin: FlamapyPlugin = {
     id: 'flamapy.view.flowmap.plugin',
     name: 'Feature Flow Map',
     version: '3.0.0',
+    description:
+      'Maps a numerical feature attribute over the feature tree, showing where its values sit.',
+    authors: [{ name: 'flamapy team', url: 'https://flamapy.github.io' }],
+    repository: 'https://github.com/flamapy/flamapy-ide',
+    homepage: 'https://flamapy.github.io',
+    license: 'LGPL-3.0',
     dependencies: ['flamapy.engine'],
   },
 

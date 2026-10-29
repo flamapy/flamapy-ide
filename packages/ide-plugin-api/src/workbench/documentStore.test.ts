@@ -8,11 +8,11 @@ describe('document store', () => {
     const listener = vi.fn();
     doc.onDidChange(listener);
     doc.setText('b', 'editor');
-    doc.setText('c', 'featuredraw');
+    doc.setText('c', 'acme.diagram');
     expect(doc.getText()).toBe('c');
     expect(doc.version).toBe(2);
     expect(listener).toHaveBeenNthCalledWith(1, { text: 'b', version: 1, origin: 'editor' });
-    expect(listener).toHaveBeenNthCalledWith(2, { text: 'c', version: 2, origin: 'featuredraw' });
+    expect(listener).toHaveBeenNthCalledWith(2, { text: 'c', version: 2, origin: 'acme.diagram' });
   });
 
   it('ignores identical writes (no version bump, no echo)', () => {

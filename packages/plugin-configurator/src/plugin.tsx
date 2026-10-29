@@ -1,7 +1,7 @@
 import { createElement, useEffect, useState } from 'react';
 import { saveAs } from 'file-saver';
 import JSZip from 'jszip';
-import type { FlamapyPlugin, PluginContext } from '@flamapy/plugin-api';
+import type { FlamapyPlugin, PluginContext } from '@flamapy/ide-plugin-api';
 import {
   Analysis,
   EngineWorker,
@@ -42,6 +42,12 @@ export const configuratorPlugin: FlamapyPlugin = {
     id: 'flamapy.configurator.plugin',
     name: 'Interactive Configurator',
     version: '3.0.0',
+    description:
+      'Build a configuration step by step: flamapy answers each selection and propagates its consequences.',
+    authors: [{ name: 'flamapy team', url: 'https://flamapy.github.io' }],
+    repository: 'https://github.com/flamapy/flamapy-ide',
+    homepage: 'https://flamapy.github.io',
+    license: 'LGPL-3.0',
     dependencies: ['flamapy.engine'],
   },
 

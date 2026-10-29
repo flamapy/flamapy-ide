@@ -2,7 +2,7 @@
 
 // Thin vertical icon rail (VSCode activity bar). Toggles the side configurator
 // panel and the right model-info panel; at the bottom, a puzzle-piece opens the
-// plugin manager and a gear opens the compute backend settings. Active toggles get
+// Plugins view and a gear opens the compute backend settings. Active toggles get
 // the accent left border, like VSCode.
 function RailButton({ active, onClick, title, children }) {
   return (
@@ -22,7 +22,7 @@ function RailButton({ active, onClick, title, children }) {
   );
 }
 
-function ActivityBar({ sidebarOpen, onToggleSidebar, modelInfoOpen, onToggleModelInfo, onOpenBackend, onOpenPlugins, onOpenRemotePlugins }) {
+function ActivityBar({ sidebarOpen, onToggleSidebar, modelInfoOpen, onToggleModelInfo, onOpenBackend, pluginsOpen, onOpenPlugins }) {
   return (
     <nav className="w-12 shrink-0 flex flex-col items-center justify-between bg-panel dark:bg-gray-900 border-r border-black/10 dark:border-white/10 py-1">
       <div className="flex flex-col items-center">
@@ -38,15 +38,7 @@ function ActivityBar({ sidebarOpen, onToggleSidebar, modelInfoOpen, onToggleMode
         </RailButton>
       </div>
       <div className="flex flex-col items-center">
-        {onOpenRemotePlugins && (
-          <RailButton active={false} onClick={onOpenRemotePlugins} title="Remote plugins (experimental)">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.5 5.5 0 10-10.4 2.3A4 4 0 003 15z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 12v6m0-6l-2.5 2.5M12 12l2.5 2.5" />
-            </svg>
-          </RailButton>
-        )}
-        <RailButton active={false} onClick={onOpenPlugins} title="Manage plugins">
+        <RailButton active={pluginsOpen} onClick={onOpenPlugins} title="Plugins">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M10.5 4.5a1.5 1.5 0 113 0V6h2.25A1.25 1.25 0 0117.25 7.25V9.5h1.5a1.5 1.5 0 010 3h-1.5v3.25A1.25 1.25 0 0116 17h-3.25v-1.5a1.5 1.5 0 00-3 0V17H6.5A1.5 1.5 0 015 15.5V12.5H6.5a1.5 1.5 0 000-3H5V7.25A1.25 1.25 0 016.25 6H10.5V4.5z" />
           </svg>

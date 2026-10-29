@@ -14,7 +14,7 @@ const DropdownMenu = ({
   const [menuStyle, setMenuStyle] = useState(null);
 
   const selectableOptions = options?.filter(
-    (o) => o.type !== "section" && o.type !== "divider"
+    (o) => o.type !== "section" && o.type !== "divider" && !o.disabled
   ) ?? [];
 
   const handleToggle = () => {
@@ -112,11 +112,13 @@ const DropdownMenu = ({
           role="menu"
         >
           {options?.length ? (
-            options.map((option) => {
+            options.map((option, position) => {
+              // Options may carry a `key` (plugin items can repeat a label) and a `title`.
+              const key = option.key ?? option.label;
               if (option.type === "section") {
                 return (
                   <div
-                    key={option.label}
+                    key={key}
                     className="px-4 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wide"
                   >
                     {option.label}
@@ -124,12 +126,27 @@ const DropdownMenu = ({
                 );
               }
               if (option.type === "divider") {
-                return <div key={option.label} className="border-t border-gray-200 my-1" />;
+                return <div key={key ?? `divider-${position}`} className="border-t border-gray-200 dark:border-white/10 my-1" />;
+              }
+              if (option.disabled) {
+                return (
+                  <div
+                    key={key}
+                    title={option.title}
+                    className="w-full text-left py-1.5 px-3 text-[13px] text-gray-400 dark:text-gray-500 cursor-not-allowed"
+                    role="option"
+                    aria-disabled="true"
+                    aria-selected={false}
+                  >
+                    {option.label}
+                  </div>
+                );
               }
               const idx = ++selectableIdx;
               return (
                 <div
-                  key={option.label}
+                  key={key}
+                  title={option.title}
                   ref={(el) => (itemRefs.current[idx] = el)}
                   onClick={() => handleAction(option)}
                   onKeyDown={(e) => e.key === "Enter" && handleAction(option)}

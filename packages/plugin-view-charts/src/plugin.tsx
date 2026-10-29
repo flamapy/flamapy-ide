@@ -1,5 +1,5 @@
 import { createElement, useEffect, useState, type ComponentType } from 'react';
-import type { Disposable, FlamapyPlugin, PluginContext } from '@flamapy/plugin-api';
+import type { Disposable, FlamapyPlugin, PluginContext } from '@flamapy/ide-plugin-api';
 import {
   Analysis,
   Catalog,
@@ -119,6 +119,12 @@ export const chartsViewPlugin: FlamapyPlugin = {
     id: 'flamapy.view.charts.plugin',
     name: 'Analysis Charts',
     version: '3.0.0',
+    description:
+      'Charts of analysis results: configuration distribution, feature inclusion probabilities and the Pareto front of attribute optimisations.',
+    authors: [{ name: 'flamapy team', url: 'https://flamapy.github.io' }],
+    repository: 'https://github.com/flamapy/flamapy-ide',
+    homepage: 'https://flamapy.github.io',
+    license: 'LGPL-3.0',
     dependencies: ['flamapy.engine'],
   },
 

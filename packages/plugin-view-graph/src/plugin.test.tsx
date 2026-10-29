@@ -1,9 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
-import { render } from '@testing-library/react';
-
-import { PluginHost, createServiceRegistry } from '@flamapy/plugin-api';
-import type { ShellApi, ViewDescriptor } from '@flamapy/plugin-api';
+import { createTestWorkbench, stubPlugin } from '@flamapy/ide-plugin-api/testing';
 import { Analysis, type AnalysisService } from '@flamapy/plugin-flamapy-engine';
 
 import { constraintsFrom, graphViewPlugin, GRAPH_VIEW_ID } from './plugin';
@@ -18,6 +15,7 @@ function fakeAnalysis(): AnalysisService {
     getFeatures: async () => [],
     getNumericalAttributes: async () => [],
     runOperation: async () => null,
+    runOperationData: async () => ({ display: null, data: null }),
     runOperationWithConfig: async () => null,
     exportModel: async () => '',
     describeError: () => '',
@@ -32,56 +30,19 @@ function fakeAnalysis(): AnalysisService {
   };
 }
 
-function shellWithViews(views: ViewDescriptor[]): ShellApi {
-  return {
-    documents: {
-      getText: () => 'features\n\tRoot\nconstraints\n\tRoot => Root',
-      version: 0,
-      dirty: false,
-      setText() {},
-      markSaved() {},
-      onDidChange: () => ({ dispose() {} }),
-    },
-    views: {
-      register(view) {
-        views.push(view);
-        return { dispose() {} };
-      },
-      open: async () => true,
-      close() {},
-      activeViewId: () => null,
-      onDidChangeActive: () => ({ dispose() {} }),
-    },
-    sidebar: { register: () => ({ dispose() {} }) },
-    toolbar: { registerMenu: () => ({ dispose() {} }) },
-    statusBar: { registerItem: () => ({ dispose() {} }) },
-    commands: { register: () => ({ dispose() {} }), execute: async () => null },
-    output: { show() {} },
-    problems: { set() {} },
-    modals: { open() {} },
-    fileHandlers: { register: () => ({ dispose() {} }) },
-  };
-}
-
 describe('graph view plugin', () => {
   it('registers the gated graph view and its component renders', async () => {
-    const views: ViewDescriptor[] = [];
-    const services = createServiceRegistry();
-    services.provide(Analysis, fakeAnalysis());
-    const host = new PluginHost(shellWithViews(views), services);
-    // Stub engine plugin: the Analysis service is provided directly above.
-    host.register({
-      manifest: { id: 'flamapy.engine', name: 'stub', version: '0' },
-      activate() {},
+    const wb = createTestWorkbench({ document: 'features\n\tRoot\nconstraints\n\tRoot => Root' });
+    // Stub engine plugin providing a fake Analysis service.
+    const engine = stubPlugin('flamapy.engine', (ctx) => {
+      ctx.subscriptions.push(ctx.services.provide(Analysis, fakeAnalysis()));
     });
-    host.register(graphViewPlugin);
-    await host.activateAll();
+    await wb.activate(engine, graphViewPlugin);
 
-    const view = views.find((candidate) => candidate.id === GRAPH_VIEW_ID);
-    expect(view).toBeDefined();
-    expect(await view!.onBeforeOpen!()).toEqual({ ok: true });
-    const { container } = render(<view.component />);
-    expect(container).toBeTruthy();
+    const view = await wb.openView(GRAPH_VIEW_ID);
+    await wb.update(() => {}); // let the async getFeatureTree resolve
+    expect(view.container.querySelector('svg')).not.toBeNull();
+    await wb.dispose();
   });
 
   it('constraintsFrom extracts the constraints block lines', () => {

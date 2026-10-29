@@ -6,7 +6,7 @@
   "main": "src/index.ts",
   "description": "Feature flow map view plugin (d3 Sankey over a numerical attribute; BDD-gated).",
   "dependencies": {
-    "@flamapy/plugin-api": "*",
+    "@flamapy/ide-plugin-api": "*",
     "@flamapy/plugin-flamapy-engine": "*",
     "@flamapy/web-ui": "*"
   },
