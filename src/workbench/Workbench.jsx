@@ -20,7 +20,6 @@ import {
 import {
   OPEN_BACKEND_SETTINGS,
 } from "@flamapy/plugin-flamapy-engine";
-import { START_OPTIMIZATION } from "@flamapy/plugin-view-charts";
 import { createWorkbench } from "@flamapy/ide-plugin-api";
 import { builtinPlugins } from "./builtinPlugins";
 import { useContributionStore } from "./useContributionStore";
@@ -431,13 +430,6 @@ function Workbench({ selectedFile, darkMode, toggleDark }) {
     const currentValidation = await ensureValidated();
     if (!currentValidation?.valid) {
       setOutput({ label: action.label, result: "Error: the model is not valid. Fix syntax errors and retry." });
-      return;
-    }
-
-    if (action.engine === "legacy" && action.value === "AttributeOptimization") {
-      workbench.shell.commands.execute(START_OPTIMIZATION, {
-        backend: action.backendAware ? selectedSolver : "z3",
-      });
       return;
     }
 

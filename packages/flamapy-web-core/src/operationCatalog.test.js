@@ -120,10 +120,10 @@ describe("analysisOperationsForSolver", () => {
     ]);
   });
 
-  it("appends the legacy attribute-optimization entry for sat and z3 only", () => {
-    expect(analysisOperationsForSolver(catalog, "sat").some((o) => o.value === "AttributeOptimization")).toBe(true);
-    expect(analysisOperationsForSolver(catalog, "z3").some((o) => o.value === "AttributeOptimization")).toBe(true);
-    expect(analysisOperationsForSolver(catalog, "bdd").some((o) => o.value === "AttributeOptimization")).toBe(false);
+  it("leaves attribute optimization to the plugin that contributes it", () => {
+    for (const solver of ["sat", "z3", "bdd"]) {
+      expect(analysisOperationsForSolver(catalog, solver).some((o) => o.label === "Attribute optimization")).toBe(false);
+    }
   });
 
   it("returns nothing when no solver is selected", () => {

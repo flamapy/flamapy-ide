@@ -2,8 +2,10 @@
 // (public/flamapy/flamapy_ide.py get_plugin_catalog) into the operation lists the
 // toolbar renders. The bridge is the single source of truth for *which backends*
 // implement *which operations*; this module only layers on the IDE's presentation
-// (nice labels, input prompts, menu order) and the one legacy operation that has a
-// bespoke modal instead of a facade method.
+// (nice labels, input prompts, menu order). Attribute optimization, which has a
+// dedicated dialog instead of a facade method, is contributed to the Analysis menu by
+// the plugin that implements it (plugin-view-charts), so it is listed only while that
+// plugin is active.
 //
 // Design: a third-party plugin installed at runtime must surface without an IDE
 // edit. So an analysis operation is shown when EITHER it is in the curated UI map
@@ -87,18 +89,6 @@ const ANALYSIS_ORDER = [
   "feature_bounds", "minimum_configuration", "t_wise_sampling",
 ];
 
-// Attribute optimization is not a facade method: it opens a dedicated modal
-// (executeAction branches on engine === "legacy"). SAT does single-objective
-// MaxSAT, Z3 multi-objective; backendAware is derived from its two backends.
-const LEGACY_ANALYSIS = [
-  {
-    value: "AttributeOptimization",
-    label: "Attribute optimization",
-    engine: "legacy",
-    backends: ["sat", "z3"],
-  },
-];
-
 function humanize(name) {
   const s = name.replace(/_/g, " ");
   return s.charAt(0).toUpperCase() + s.slice(1);
@@ -177,10 +167,5 @@ export function analysisOperationsForSolver(catalog, solver) {
     const fromExtra = op.backends.some((b) => !CURATED_BACKENDS.has(b));
     return curated || fromExtra;
   });
-  const actions = sortByOrder(ops.map(toAction), ANALYSIS_ORDER);
-  const legacy = LEGACY_ANALYSIS.filter((op) => op.backends.includes(solver)).map((op) => ({
-    ...op,
-    backendAware: op.backends.length > 1,
-  }));
-  return [...actions, ...legacy];
+  return sortByOrder(ops.map(toAction), ANALYSIS_ORDER);
 }

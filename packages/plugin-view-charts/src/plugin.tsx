@@ -207,6 +207,22 @@ export const chartsViewPlugin: FlamapyPlugin = {
       }),
     );
 
+    // The Analysis menu entry, for the solvers that implement attribute optimization
+    // (SAT: single-objective MaxSAT, Z3: multi-objective). Listed only while this plugin
+    // is active, so it never points at a missing command.
+    ctx.subscriptions.push(
+      ctx.shell.menus.registerItem({
+        id: 'flamapy.charts.attributeOptimization',
+        menu: 'analysis',
+        label: 'Attribute optimization',
+        title: 'Optimise numerical feature attributes; shows the Pareto front',
+        backends: ['sat', 'z3'],
+        run: async () => {
+          await ctx.shell.commands.execute(START_OPTIMIZATION, { backend: analysis.selectedSolver });
+        },
+      }),
+    );
+
     ctx.subscriptions.push(
       ctx.shell.commands.register(START_OPTIMIZATION, async (args) => {
         const backend = ((args as { backend?: string }) ?? {}).backend || 'z3';
