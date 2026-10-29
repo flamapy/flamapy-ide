@@ -18,6 +18,17 @@ import FeatureTree from '@flamapy/web-ui/src/FeatureTree.jsx';
 export const CONFIGURATOR_VIEW_ID = 'flamapy.view.configurator';
 export const CONFIG_SIDEBAR_ID = 'flamapy.sidebar.configuration';
 
+const configuratorIcon = createElement(
+  'svg',
+  { className: 'w-5 h-5', fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24', 'aria-hidden': true },
+  createElement('path', {
+    strokeLinecap: 'round',
+    strokeLinejoin: 'round',
+    strokeWidth: 1.8,
+    d: 'M4 6h16M4 12h10M4 18h7',
+  }),
+);
+
 // Configuration-input operations — run from the configuration panel against the tree's
 // current selection (a {feature: value} mapping). A `method` entry runs that mapping
 // through the facade; a `value` entry drives a UI-only flow (wizard, download).
@@ -176,9 +187,18 @@ export const configuratorPlugin: FlamapyPlugin = {
     ctx.subscriptions.push(
       ctx.shell.sidebar.register({
         id: CONFIG_SIDEBAR_ID,
-        title: 'Configuration',
+        title: 'Configurator',
         side: 'left',
+        icon: configuratorIcon,
         component: ConfigurationSidebar,
+      }),
+    );
+    // The configurator's panel accompanies its wizard view.
+    ctx.subscriptions.push(
+      ctx.shell.views.onDidChangeActive((id) => {
+        if (id === CONFIGURATOR_VIEW_ID) {
+          ctx.shell.sidebar.show(CONFIG_SIDEBAR_ID);
+        }
       }),
     );
   },

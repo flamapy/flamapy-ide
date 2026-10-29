@@ -69,4 +69,14 @@ describe('workbench shell', () => {
     expect(workbench.fileHandlers.forExtension('json')).toBe(generic);
     expect(workbench.fileHandlers.forExtension('xyz')).toBeUndefined();
   });
+
+  it('sidebar.show reveals registered panels only', () => {
+    const workbench = createWorkbench();
+    const shown: string[] = [];
+    workbench.delegates.showSidebarPanel = (id) => void shown.push(id);
+    workbench.shell.sidebar.register({ id: 'outline', title: 'Outline', side: 'left', component: () => null });
+    workbench.shell.sidebar.show('outline');
+    workbench.shell.sidebar.show('missing');
+    expect(shown).toEqual(['outline']);
+  });
 });

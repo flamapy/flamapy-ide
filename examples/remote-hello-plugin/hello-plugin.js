@@ -32,6 +32,14 @@ function HelloView() {
   );
 }
 
+function HelloPanel() {
+  return createElement(
+    "p",
+    { className: "text-[13px] text-gray-700 dark:text-gray-300" },
+    "A side panel from a remote plugin. Move it to the other side with the arrows in its header.",
+  );
+}
+
 function HelloStatusItem() {
   return createElement(
     "span",
@@ -68,6 +76,15 @@ export default {
         id: "example.remote-hello.status",
         side: "right",
         component: HelloStatusItem,
+      }),
+    );
+    // A side panel: it gets its own activity-bar button (no icon given: initials).
+    ctx.subscriptions.push(
+      ctx.shell.sidebar.register({
+        id: "example.remote-hello.panel",
+        title: "Hello panel",
+        side: "right",
+        component: HelloPanel,
       }),
     );
     // An item in the built-in Structural menu, listed under this plugin's name.

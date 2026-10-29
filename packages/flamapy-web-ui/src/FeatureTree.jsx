@@ -1,6 +1,5 @@
 /* eslint-disable react/prop-types */
 import { useEffect, useState } from "react";
-import { ResizableBox } from "react-resizable";
 import DropdownMenu from "./DropdownMenu";
 
 // TreeNode component
@@ -93,59 +92,33 @@ const TreeNode = ({ node, statusMap, setStatusMap, history }) => {
   );
 };
 
-// TreeView component
+// TreeView component: the configurator's content (operations menu + feature tree). The
+// side-panel frame around it (title, width, scrolling) belongs to the IDE shell.
 const TreeView = ({ treeData, executeAction, operations, history }) => {
   const [statusMap, setStatusMap] = useState({});
-  const [panelHeight, setPanelHeight] = useState(() =>
-    typeof window !== "undefined" ? Math.max(400, window.innerHeight - 140) : 600
-  );
 
   useEffect(() => {
     setStatusMap({});
   }, [treeData, history]);
 
-  useEffect(() => {
-    const updateHeight = () => {
-      setPanelHeight(Math.max(400, window.innerHeight - 140));
-    };
-    updateHeight();
-    window.addEventListener("resize", updateHeight);
-    return () => window.removeEventListener("resize", updateHeight);
-  }, []);
-
   return (
-    <ResizableBox
-      width={300}
-      height={panelHeight}
-      axis="x"
-      minConstraints={[200, panelHeight]}
-      maxConstraints={[500, panelHeight]}
-      className="bg-panel dark:bg-gray-900 text-neutral-900 dark:text-gray-100 p-3 overflow-auto relative border-r border-black/10 dark:border-white/10 h-full"
-      handle={
-        <div className="absolute right-0 top-0 h-full w-1.5 cursor-ew-resize z-20" />
-      }
-    >
-      <div className="space-y-3 h-full">
-        <h2 className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider px-1">
-          Configurator
-        </h2>
-        <DropdownMenu
-          buttonLabel={"Configuration operations"}
-          options={operations}
-          executeAction={(action) => executeAction(action, statusMap)}
-          className="w-full inline-flex items-center justify-between gap-1 bg-accent text-white py-1.5 px-3 rounded-md text-[12px] hover:bg-[#1d5cf0] transition-colors"
-        />
+    <div className="space-y-3">
+      <DropdownMenu
+        buttonLabel={"Configuration operations"}
+        options={operations}
+        executeAction={(action) => executeAction(action, statusMap)}
+        className="w-full inline-flex items-center justify-between gap-1 bg-accent text-white py-1.5 px-3 rounded-md text-[12px] hover:bg-[#1d5cf0] transition-colors"
+      />
 
-        {treeData && (
-          <TreeNode
-            node={treeData}
-            statusMap={statusMap}
-            setStatusMap={setStatusMap}
-            history={history}
-          />
-        )}
-      </div>
-    </ResizableBox>
+      {treeData && (
+        <TreeNode
+          node={treeData}
+          statusMap={statusMap}
+          setStatusMap={setStatusMap}
+          history={history}
+        />
+      )}
+    </div>
   );
 };
 

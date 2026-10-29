@@ -2,7 +2,6 @@
 import { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import "react-resizable/css/styles.css";
 import { saveAs } from "file-saver";
-import ModelInformation from "../components/ModelInformation";
 import TitleBar from "../components/layout/TitleBar";
 import ActionToolbar from "../components/layout/ActionToolbar";
 import ActivityBar from "../components/layout/ActivityBar";
@@ -22,7 +21,6 @@ import {
   OPEN_BACKEND_SETTINGS,
 } from "@flamapy/plugin-flamapy-engine";
 import { START_OPTIMIZATION } from "@flamapy/plugin-view-charts";
-import { CONFIGURATOR_VIEW_ID } from "@flamapy/plugin-configurator";
 import { createWorkbench } from "@flamapy/ide-plugin-api";
 import { builtinPlugins } from "./builtinPlugins";
 import { useContributionStore } from "./useContributionStore";
@@ -31,6 +29,17 @@ import { useShareLinks } from "./useShareLinks";
 import { loadRememberedRemotePlugins, pluginEnablement } from "./remotePlugins";
 import { createPluginsView, PLUGINS_VIEW_ID } from "./PluginsView";
 import { withContributedItems } from "./menuContributions";
+import {
+  activePanel,
+  loadLayout,
+  movePanel,
+  panelWidth,
+  resizePanel,
+  saveLayout,
+  showPanel,
+  sideOf,
+  togglePanel,
+} from "./sidePanels";
 import { OperationForm, OperationResultView, needsAttributes, needsFeatures } from "./OperationUi";
 import { useCollabSession } from "./useCollabSession";
 import { ToolbarMenuSlot } from "./slots/ToolbarMenuSlot";
@@ -80,10 +89,22 @@ function Workbench({ selectedFile, darkMode, toggleDark }) {
   const [initialContent, setInitialContent] = useState("");
   // Model metrics (right panel) — fetched separately from validation because
   // some metrics are full analyses and must not run on every (debounced) keystroke.
-  const [modelInfo, setModelInfo] = useState(null);
   const [currentView, setCurrentView] = useState("source");
-  const [leftSidebarOpen, setLeftSidebarOpen] = useState(true);
-  const [modelInfoOpen, setModelInfoOpen] = useState(true);
+  // Side panels contributed by plugins: which one each side shows, sides moved by the
+  // user and widths, remembered across sessions (see sidePanels.ts).
+  const sidePanels = useContributionStore(workbench.stores.sidebarPanels);
+  const [panelLayout, setPanelLayout] = useState(loadLayout);
+  const updatePanelLayout = useCallback((change) => {
+    setPanelLayout((layout) => {
+      const next = change(layout);
+      saveLayout(next);
+      return next;
+    });
+  }, []);
+  workbench.delegates.showSidebarPanel = (id) => {
+    const panel = workbench.stores.sidebarPanels.get(id);
+    if (panel) updatePanelLayout((layout) => showPanel(layout, panel));
+  };
   const [panelTab, setPanelTab] = useState("output");
 
   // Operation input form ({ title, inputs, choices, resolve } while open, else null)
@@ -308,11 +329,6 @@ function Workbench({ selectedFile, darkMode, toggleDark }) {
     }
   }, [isLoaded, isImported, selectedFile, call, isEditorReady]);
 
-  // The configurator's sidebar panel accompanies its wizard view.
-  useEffect(() => {
-    if (currentView === CONFIGURATOR_VIEW_ID) setLeftSidebarOpen(true);
-  }, [currentView]);
-
   const handleResize = (e, data) => {
     e.preventDefault();
     if (data.size.height !== lastOutputHeight) {
@@ -330,26 +346,7 @@ function Workbench({ selectedFile, darkMode, toggleDark }) {
     if (!collabConfig.enabled) {
       localStorage.setItem("flamapy-ide-content", code);
     }
-    return engine.services.analysis.validateNow().then((result) => {
-      if (result) {
-        setModelInfo(null); // metrics refer to the previous model — refetch on demand
-      }
-      return result;
-    });
-  }
-
-  // The right panel's Validate button also computes the model metrics, which
-  // are deliberately excluded from per-keystroke validation (they include full
-  // analyses such as core features and atomic sets).
-  async function handleValidateClick() {
-    const result = await validateModel();
-    if (result?.valid) {
-      try {
-        setModelInfo(await call("getModelInformation"));
-      } catch (error) {
-        setOutput({ label: "Model information", result: error.message });
-      }
-    }
+    return engine.services.analysis.validateNow();
   }
 
   // A plugin's menu item runs its own handler; a plugin operation runs through the
@@ -532,6 +529,22 @@ function Workbench({ selectedFile, darkMode, toggleDark }) {
     if (next === REST) workbench.shell.commands.execute(OPEN_BACKEND_SETTINGS);
   }, [computeBackend, engine.services, workbench]);
 
+  // The panel a side shows, in the shell's frame (header, move, close, resize).
+  function sidePanelSlot(side) {
+    const panel = activePanel(sidePanels, panelLayout, side);
+    return (
+      <SidebarSlot
+        key={side}
+        panel={panel}
+        side={side}
+        width={panel ? panelWidth(panelLayout, panel) : 0}
+        onClose={(closing) => updatePanelLayout((layout) => togglePanel(layout, sidePanels, closing))}
+        onMove={(moving) => updatePanelLayout((layout) => movePanel(layout, sidePanels, moving))}
+        onResize={(resized, width) => updatePanelLayout((layout) => resizePanel(layout, resized, width))}
+      />
+    );
+  }
+
   return (
     <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-surface dark:bg-gray-950 text-gray-900 dark:text-gray-100">
       <TitleBar darkMode={darkMode} toggleDark={toggleDark} />
@@ -556,20 +569,24 @@ function Workbench({ selectedFile, darkMode, toggleDark }) {
 
       <div className="flex flex-1 overflow-hidden">
         <ActivityBar
-          sidebarOpen={leftSidebarOpen}
-          onToggleSidebar={() => setLeftSidebarOpen((o) => !o)}
-          modelInfoOpen={modelInfoOpen}
-          onToggleModelInfo={() => setModelInfoOpen((o) => !o)}
+          panels={sidePanels.map((panel) => ({
+            id: panel.id,
+            title: panel.title,
+            icon: panel.icon,
+            side: sideOf(panel, panelLayout),
+            active: activePanel(sidePanels, panelLayout, sideOf(panel, panelLayout))?.id === panel.id,
+          }))}
+          onTogglePanel={(id) =>
+            updatePanelLayout((layout) =>
+              togglePanel(layout, sidePanels, sidePanels.find((panel) => panel.id === id))
+            )
+          }
           onOpenBackend={() => workbench.shell.commands.execute(OPEN_BACKEND_SETTINGS)}
           pluginsOpen={currentView === PLUGINS_VIEW_ID}
           onOpenPlugins={() => workbench.shell.views.open(PLUGINS_VIEW_ID)}
         />
 
-        <SidebarSlot
-          store={workbench.stores.sidebarPanels}
-          side="left"
-          visible={leftSidebarOpen}
-        />
+        {sidePanelSlot("left")}
 
         <div className="flex flex-1 flex-col overflow-hidden">
           <EditorTabs tabs={editorTabs} currentView={currentView} onSelect={selectTab} />
@@ -599,14 +616,7 @@ function Workbench({ selectedFile, darkMode, toggleDark }) {
           />
         </div>
 
-        {modelInfoOpen && (
-          <ModelInformation
-            onValidateModel={handleValidateClick}
-            validation={validation}
-            modelInfo={modelInfo}
-          />
-        )}
-        <SidebarSlot store={workbench.stores.sidebarPanels} side="right" />
+        {sidePanelSlot("right")}
       </div>
 
       <StatusBar

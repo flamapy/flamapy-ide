@@ -8,9 +8,6 @@ const ModelProperties = ({ modelProperties }) => {
         The model is syntactically valid
       </div>
 
-      <h2 className="text-[#0D486C] dark:text-blue-300 font-bold text-lg mb-3">
-        Model Information
-      </h2>
 
       <div className="divide-y divide-neutral-300 dark:divide-gray-600 space-y-2">
         {Object.entries(modelProperties).map(([key, value]) => (

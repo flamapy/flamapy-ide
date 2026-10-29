@@ -14,6 +14,21 @@ import {
 import { createWorkerServices } from './workerService';
 // @ts-expect-error untyped JSX components
 import BackendSettingsModal from './ui/BackendSettingsModal.jsx';
+// @ts-expect-error untyped JSX components
+import ModelInformationPanel from './ui/ModelInformationPanel.jsx';
+
+export const MODEL_INFO_PANEL_ID = 'flamapy.engine.modelInformation';
+
+const infoIcon = createElement(
+  'svg',
+  { className: 'w-5 h-5', fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24', 'aria-hidden': true },
+  createElement('path', {
+    strokeLinecap: 'round',
+    strokeLinejoin: 'round',
+    strokeWidth: 1.8,
+    d: 'M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
+  }),
+);
 
 function markersFrom(validation: ValidationResult | null): Marker[] {
   if (!validation || validation.valid) {
@@ -74,6 +89,22 @@ export const flamapyEnginePlugin: FlamapyPlugin = {
     ctx.subscriptions.push(
       analysis.onValidationChange(() => {
         ctx.shell.problems.set('flamapy', markersFrom(analysis.validation));
+      }),
+    );
+
+    // The "Model information" side panel: validate and compute the model metrics.
+    ctx.subscriptions.push(
+      ctx.shell.sidebar.register({
+        id: MODEL_INFO_PANEL_ID,
+        title: 'Model information',
+        side: 'right',
+        icon: infoIcon,
+        component: () =>
+          createElement(ModelInformationPanel, {
+            analysis,
+            worker: services.worker,
+            onError: (error: Error) => ctx.shell.output.show('Model information', error.message),
+          }),
       }),
     );
 

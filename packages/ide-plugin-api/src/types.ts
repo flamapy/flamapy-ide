@@ -154,12 +154,21 @@ export interface ViewDescriptor {
   order?: number;
 }
 
+/**
+ * A side panel. Each panel gets a button in the activity bar; each side shows one panel at
+ * a time. The shell draws the frame (header with the title, move and close buttons, and a
+ * resizable width): `component` renders the content only, filling the frame.
+ */
 export interface SidebarPanelDescriptor {
   id: string;
+  /** Shown in the panel header and as the activity-bar tooltip. */
   title: string;
+  /** Where the panel opens by default. Users can move it to the other side. */
   side: 'left' | 'right';
+  /** The activity-bar icon, about 20 px (e.g. an inline SVG); default: the title's initials. */
   icon?: ReactNode;
   component: ComponentType;
+  /** Order in the activity bar, within its side; lower first. */
   order?: number;
 }
 
@@ -312,6 +321,8 @@ export interface ShellApi {
   };
   sidebar: {
     register(panel: SidebarPanelDescriptor): Disposable;
+    /** Show a registered panel on its side (e.g. when your view opens). */
+    show(id: string): void;
   };
   toolbar: {
     /** A separate toolbar group of the plugin's own, after the built-in menus. */

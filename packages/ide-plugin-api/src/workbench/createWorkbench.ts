@@ -31,6 +31,8 @@ export interface ShellDelegates {
   /** Switch the main view (after the descriptor's onBeforeOpen guard passed). */
   setActiveView(id: string): void;
   getActiveView(): string | null;
+  /** Show this side panel on its side. */
+  showSidebarPanel(id: string): void;
 }
 
 export interface Workbench {
@@ -89,6 +91,7 @@ export function createWorkbench(
     openModal: () => {},
     setActiveView: () => {},
     getActiveView: () => null,
+    showSidebarPanel: () => {},
   };
 
   const commandHandlers = new Map<string, (args?: unknown) => unknown>();
@@ -134,6 +137,11 @@ export function createWorkbench(
     },
     sidebar: {
       register: (panel) => sidebarPanels.register(panel),
+      show(id) {
+        if (sidebarPanels.get(id)) {
+          delegates.showSidebarPanel(id);
+        }
+      },
     },
     toolbar: {
       registerMenu: (menu) => toolbarMenus.register(menu),

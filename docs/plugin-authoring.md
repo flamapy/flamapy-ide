@@ -121,8 +121,17 @@ plugin can be retried.
     synchronously inside `open()`.
 - **`ctx.shell.menus` / `operations`:** add to the built-in toolbar menus (see
   [Menus and operations](#menus-and-operations)).
-- **`ctx.shell.sidebar` / `toolbar` / `statusBar`:** panels on either side, a toolbar
-  group of your own (captioned with your plugin's name), and status items.
+- **`ctx.shell.sidebar`:** side panels.
+  - `register({ id, title, side, icon?, component, order? })` adds a panel with its own
+    activity-bar button (`icon`, about 20 px; default: the title's initials).
+  - Each side shows **one panel at a time**: the user picks it with the activity bar and
+    can close the side. `side` is only the default: users can move a panel to the other
+    side, and resize it. Their choices are remembered.
+  - The shell draws the frame (header with the title, move and close buttons, width):
+    your `component` renders the content only.
+  - `show(id)` brings your panel up on its side, e.g. when your view opens.
+- **`ctx.shell.toolbar` / `statusBar`:** a toolbar group of your own (captioned with your
+  plugin's name), and status items.
 - **`ctx.shell.commands`:** the cross-plugin command bus, with `register(id, handler)`
   and `execute(id, args)`. For example, the engine's optimization action executes
   `flamapy.charts.showParetoFront`.

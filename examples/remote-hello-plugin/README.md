@@ -1,8 +1,8 @@
 # remote-hello-plugin
 
 The reference remote plugin for flamapy-ide's experimental remote loading: a single
-plain-ESM file (`hello-plugin.js`) that contributes a view, a status-bar item, a
-*Say hello* item in the Structural menu, and a *Find features…* operation (inputs form,
+plain-ESM file (`hello-plugin.js`) that contributes a view, a side panel, a status-bar
+item, a *Say hello* item in the Structural menu, and a *Find features…* operation (inputs form,
 progress and a table result) that asks the flamapy engine for the model's features.
 
 ## The remote plugin contract
