@@ -27,8 +27,9 @@ pyodide build
 # -> dist/pysdd-1.0.6-cp312-cp312-pyodide_2024_0_wasm32.whl
 ```
 
-Copy the wheel to `public/flamapy/` (git-tracked via a `.gitignore` exception) and keep
-the filename referenced in `public/flamapy/plugins.registry.json` in sync.
+Copy the wheel to `public/flamapy/` (git-tracked via a `.gitignore` exception) and list
+its distribution name in the plugin's `wheels` in `public/flamapy/plugins.conf.template.json`
+(the build resolves the version).
 
 ## Verifying
 

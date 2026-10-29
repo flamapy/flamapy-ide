@@ -20,7 +20,6 @@ import {
 } from "@flamapy/web-core";
 import {
   OPEN_BACKEND_SETTINGS,
-  OPEN_PLUGIN_MANAGER,
 } from "@flamapy/plugin-flamapy-engine";
 import { START_OPTIMIZATION } from "@flamapy/plugin-view-charts";
 import { CONFIGURATOR_VIEW_ID } from "@flamapy/plugin-configurator";
@@ -64,9 +63,7 @@ function Workbench({ selectedFile, darkMode, toggleDark }) {
       title: "Plugins",
       dynamic: true,
       order: 1000,
-      component: createPluginsView(created, {
-        onManageFlamapyPlugins: () => created.shell.commands.execute(OPEN_PLUGIN_MANAGER),
-      }),
+      component: createPluginsView(created),
     });
     workbenchRef.current = created;
   }

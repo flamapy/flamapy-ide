@@ -35,7 +35,12 @@ function fakeWorker(overrides: Partial<EngineWorkerService> = {}): {
     },
     interrupt: () => false,
     restart() {},
+    flamapyPlugins: () => [],
+    async installFlamapyPlugin() {},
+    async removeFlamapyPlugin() {},
     async installPythonPlugin() {},
+    urlPythonPlugins: () => [],
+    async removePythonPlugin() {},
     ...overrides,
   };
   return { worker, calls };

@@ -8,14 +8,14 @@
 // Design: a third-party plugin installed at runtime must surface without an IDE
 // edit. So an analysis operation is shown when EITHER it is in the curated UI map
 // below (the built-in surface, kept byte-identical to the pre-catalog table) OR it
-// is contributed by a backend that is not one of the boot-bundled defaults — i.e.
-// it came from an installed extra plugin. Framework operations that exist but were
-// never exposed in the IDE (product_distribution, language_level, …) therefore stay
-// hidden for the default backends, yet a new plugin's novel operations appear.
+// is contributed by a backend outside CURATED_BACKENDS. Framework operations that exist
+// but were never exposed in the IDE (product_distribution, language_level, …) therefore
+// stay hidden for the curated backends, yet any other plugin's operations appear.
 
-// Backends bundled and enabled at boot (public/flamapy/plugins.conf.json). Their
-// operation surface is curated; only operations in OPERATION_UI show for them.
-const DEFAULT_BACKENDS = new Set(["sat", "bdd", "z3"]);
+// flamapy's core solvers, whose operation surface is curated: only operations in
+// OPERATION_UI show for them. This is presentation only: how a plugin is installed
+// (preinstalled or not, see plugins.conf.template.json) plays no part.
+const CURATED_BACKENDS = new Set(["sat", "bdd", "z3"]);
 
 // Presentation for the built-in operations, keyed by facade method name. `inputs` are
 // InputSpecs (see @flamapy/ide-plugin-api): the fields of the shell's input form. A
@@ -174,7 +174,7 @@ export function analysisOperationsForSolver(catalog, solver) {
   const ops = (catalog?.operations || []).filter((op) => {
     if (op.structural || !op.backends?.includes(solver)) return false;
     const curated = Boolean(OPERATION_UI[op.method]);
-    const fromExtra = op.backends.some((b) => !DEFAULT_BACKENDS.has(b));
+    const fromExtra = op.backends.some((b) => !CURATED_BACKENDS.has(b));
     return curated || fromExtra;
   });
   const actions = sortByOrder(ops.map(toAction), ANALYSIS_ORDER);

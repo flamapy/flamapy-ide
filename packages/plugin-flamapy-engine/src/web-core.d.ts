@@ -21,7 +21,8 @@ declare module '@flamapy/web-core' {
   }
   export function createWorkerClient(options?: {
     workerUrl?: string;
-    createWorker?: () => Worker;
+    createWorker?: (url: string) => Worker;
+    pluginChoices?: () => Record<string, boolean>;
   }): WorkerClient;
 
   export const WASM: string;

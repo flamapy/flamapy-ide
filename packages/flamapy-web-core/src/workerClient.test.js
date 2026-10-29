@@ -93,4 +93,24 @@ describe("createWorkerClient", () => {
     // vitest node env is not cross-origin isolated, so no interrupt buffer exists.
     expect(client.interrupt()).toBe(false);
   });
+
+  it("passes the user's flamapy plugin choices to the worker, re-read on restart", () => {
+    const urls = [];
+    let choices = {};
+    const client = createWorkerClient({
+      workerUrl: "/webworker.js",
+      pluginChoices: () => choices,
+      createWorker: (url) => {
+        urls.push(url);
+        return new FakeWorker();
+      },
+    });
+    client.start();
+    choices = { z3: false, sdd: true };
+    client.restart();
+    expect(urls).toEqual([
+      "/webworker.js",
+      `/webworker.js?plugins=${encodeURIComponent('{"z3":false,"sdd":true}')}`,
+    ]);
+  });
 });

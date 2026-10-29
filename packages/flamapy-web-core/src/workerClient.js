@@ -15,14 +15,26 @@ function createInterruptBuffer() {
 }
 
 /**
- * @param {{ workerUrl?: string, createWorker?: () => Worker }} [options]
+ * @param {{
+ *   workerUrl?: string,
+ *   createWorker?: (url: string) => Worker,
+ *   pluginChoices?: () => Record<string, boolean>,
+ * }} [options]
  *   `createWorker` overrides construction (tests); `workerUrl` defaults to
- *   `${import.meta.env.BASE_URL}webworker.js`.
+ *   `${import.meta.env.BASE_URL}webworker.js`. `pluginChoices` is read on every
+ *   (re)start: the user's flamapy plugin decisions ({ key: installed }), passed to the
+ *   worker so it boots exactly those plugins (see flamapy.js bootPlugins).
  */
 export function createWorkerClient(options = {}) {
-  const makeWorker =
-    options.createWorker ??
-    (() => new Worker(options.workerUrl ?? `${import.meta.env.BASE_URL}webworker.js`));
+  const makeWorker = options.createWorker ?? ((url) => new Worker(url));
+
+  function workerUrl() {
+    const base = options.workerUrl ?? `${import.meta.env.BASE_URL}webworker.js`;
+    const choices = options.pluginChoices?.() ?? {};
+    if (Object.keys(choices).length === 0) return base;
+    const separator = base.includes("?") ? "&" : "?";
+    return `${base}${separator}plugins=${encodeURIComponent(JSON.stringify(choices))}`;
+  }
 
   const pending = new Map();
   const loadListeners = new Set();
@@ -66,7 +78,7 @@ export function createWorkerClient(options = {}) {
   }
 
   function spawn() {
-    worker = makeWorker();
+    worker = makeWorker(workerUrl());
     attachHandler(worker);
     if (interruptBuffer) {
       worker.postMessage({ command: "setInterruptBuffer", buffer: interruptBuffer });

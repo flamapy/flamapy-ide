@@ -16,8 +16,46 @@ export interface EngineWorkerService {
   /** Raise KeyboardInterrupt in the running operation; false = no SAB, use restart(). */
   interrupt(): boolean;
   restart(): void;
-  /** Install a Python wheel plugin at runtime and persist it for future sessions. */
+
+  /**
+   * The flamapy plugins the IDE knows (plugins.conf.json): the preinstalled solvers and
+   * the installable extras, all handled the same way. Empty until the engine has loaded.
+   */
+  flamapyPlugins(): FlamapyPluginInfo[];
+  /** Install a known flamapy plugin now, and keep it installed in future sessions. */
+  installFlamapyPlugin(key: string): Promise<void>;
+  /**
+   * Remove a flamapy plugin (preinstalled or not) and remember it. Python modules can't
+   * be unloaded, so the engine restarts without it.
+   */
+  removeFlamapyPlugin(key: string): Promise<void>;
+
+  /** Install a Python wheel plugin from a URL at runtime and persist it for future sessions. */
   installPythonPlugin(descriptor: PythonPluginDescriptor): Promise<void>;
+  /** The wheels installed with `installPythonPlugin`, oldest first. */
+  urlPythonPlugins(): PythonPluginDescriptor[];
+  /** Forget a wheel installed from a URL; the engine restarts without it. */
+  removePythonPlugin(descriptor: PythonPluginDescriptor): Promise<void>;
+}
+
+/** A flamapy plugin from plugins.conf.json, with its state in this IDE. */
+export interface FlamapyPluginInfo {
+  key: string;
+  label: string;
+  /** The solver backend token it adds, e.g. `sat`. */
+  backend: string;
+  description: string;
+  /** Installed out of the box (the user can still remove it). */
+  preinstalled: boolean;
+  /** False when no Pyodide build exists yet: listed, not installable. */
+  available: boolean;
+  note?: string;
+  /** Source code of the plugin (https). */
+  repository?: string;
+  /** Installed, by the user's choice or by default: boots with the engine. */
+  installed: boolean;
+  /** Loaded in the running engine (its backend is in the catalog). */
+  loaded: boolean;
 }
 
 export interface PythonPluginDescriptor {
@@ -126,4 +164,3 @@ export const Configurator = serviceId<ConfiguratorService>('flamapy.engine.confi
 // ---------------------------------------------------------------------------------
 
 export const OPEN_BACKEND_SETTINGS = 'flamapy.engine.openBackendSettings';
-export const OPEN_PLUGIN_MANAGER = 'flamapy.engine.openPluginManager';

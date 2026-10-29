@@ -6,13 +6,13 @@ export {
   Configurator,
   EngineWorker,
   OPEN_BACKEND_SETTINGS,
-  OPEN_PLUGIN_MANAGER,
 } from './services';
 export type {
   AnalysisService,
   CatalogService,
   ConfiguratorService,
   EngineWorkerService,
+  FlamapyPluginInfo,
   OperationAction,
   PythonPluginDescriptor,
   ValidationResult,

@@ -51,7 +51,8 @@ pyodide build
 ```
 
 Copy the wheel to `public/flamapy/` (it is git-tracked via a `.gitignore` exception)
-and keep the filename referenced in `public/flamapy/plugins.registry.json` in sync.
+and list its distribution name in the plugin's `wheels` in
+`public/flamapy/plugins.conf.template.json` (the build resolves the version).
 
 ## Verifying
 

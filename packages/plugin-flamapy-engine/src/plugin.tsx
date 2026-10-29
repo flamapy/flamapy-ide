@@ -8,15 +8,12 @@ import {
   Configurator,
   EngineWorker,
   OPEN_BACKEND_SETTINGS,
-  OPEN_PLUGIN_MANAGER,
   type ConfiguratorService,
   type ValidationResult,
 } from './services';
 import { createWorkerServices } from './workerService';
 // @ts-expect-error untyped JSX components
 import BackendSettingsModal from './ui/BackendSettingsModal.jsx';
-// @ts-expect-error untyped JSX components
-import PluginManagerModal from './ui/PluginManagerModal.jsx';
 
 function markersFrom(validation: ValidationResult | null): Marker[] {
   if (!validation || validation.valid) {
@@ -91,18 +88,6 @@ export const flamapyEnginePlugin: FlamapyPlugin = {
               close();
             },
             onCancel: close,
-          }),
-        );
-      }),
-    );
-    ctx.subscriptions.push(
-      ctx.shell.commands.register(OPEN_PLUGIN_MANAGER, () => {
-        ctx.shell.modals.open((close) =>
-          createElement(PluginManagerModal, {
-            installedBackends: services.catalog.installedBackends(),
-            onInstall: (descriptor: Parameters<typeof services.worker.installPythonPlugin>[0]) =>
-              services.worker.installPythonPlugin(descriptor),
-            onClose: close,
           }),
         );
       }),

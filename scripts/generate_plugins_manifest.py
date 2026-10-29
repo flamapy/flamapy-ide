@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """Generate the served plugins.conf.json from the tracked template + built wheels.
 
-The browser loader (``public/flamapy/flamapy.js``) fetches ``plugins.conf.json`` and
-``micropip.install``s the exact wheel filenames it lists. Those filenames embed
-versions, so they are build artifacts -- not source. The repo therefore tracks only
-``plugins.conf.template.json`` (same structure, but each wheel listed by bare
-distribution name, e.g. ``flamapy_fw``); this script resolves those names against the
-wheels present in the wheels dir and writes the versioned ``plugins.conf.json``.
+``plugins.conf.json`` lists the core wheels and every flamapy plugin the IDE knows
+(preinstalled or installable). The browser loader (``public/flamapy/flamapy.js``)
+``micropip.install``s the exact wheel filenames it lists, at boot or when a plugin is
+installed. Those filenames embed versions, so they are build artifacts -- not source.
+The repo therefore tracks only ``plugins.conf.template.json`` (same structure, but each
+wheel listed by bare distribution name, e.g. ``flamapy_fw``); this script resolves those
+names against the wheels present in the wheels dir and writes ``plugins.conf.json``.
+A wheel given as an absolute URL is kept as is.
 
 Run by ``make build-wheels`` right after it downloads the wheels pinned in
 ``./flamapy.version``; ``plugins.conf.json`` is gitignored.
@@ -31,7 +33,7 @@ def package_key(wheel_filename: str) -> str:
 
 def wheel_lists(conf: dict) -> list[list]:
     """Every wheel list referenced by the manifest (core + plugins)."""
-    return [conf["core"]["wheels"], *(p["wheels"] for p in conf["plugins"].values())]
+    return [conf["core"]["wheels"], *(p["wheels"] for p in conf["plugins"])]
 
 
 def main() -> int:
@@ -47,6 +49,8 @@ def main() -> int:
     resolved: set[str] = set()
     for wheels in wheel_lists(template):  # template entries are bare distribution names
         for i, name in enumerate(wheels):
+            if "://" in name:
+                continue  # an absolute URL, served from elsewhere
             if name in by_name:
                 wheels[i] = by_name[name]
                 resolved.add(name)
@@ -58,16 +62,6 @@ def main() -> int:
             f"No wheel in {WHEELS_DIR} for templated package(s): "
             + ", ".join(sorted(set(missing))) + "\nRun `make build-wheels` to fetch them."
         )
-
-    # Wheels referenced by the runtime-install registry (plugins.registry.json) are
-    # served on demand by the Plugin Manager, not loaded at boot — don't flag them.
-    registry_path = WHEELS_DIR / "plugins.registry.json"
-    if registry_path.exists():
-        registry = json.loads(registry_path.read_text())
-        for plugin in registry.get("plugins", []):
-            for ref in plugin.get("wheelRefs", []):
-                if ref.startswith("flamapy/"):
-                    resolved.add(package_key(os.path.basename(ref)))
 
     unused = sorted(set(by_name) - resolved)
     if unused:

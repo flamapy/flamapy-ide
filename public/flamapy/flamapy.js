@@ -9,7 +9,16 @@ class Flamapy {
     this.pluginsConfig = null;
   }
 
-  async loadFlamapy() {
+  // Which flamapy plugins boot: the ones the user installed, plus the preinstalled ones
+  // the user hasn't removed. `choices` maps plugin key -> installed (true/false) and only
+  // records the user's decisions; plugins without a decision follow `preinstalled`.
+  static bootPlugins(config, choices = {}) {
+    return config.plugins.filter(
+      (plugin) => plugin.available !== false && (choices[plugin.key] ?? plugin.preinstalled === true)
+    );
+  }
+
+  async loadFlamapy(choices = {}) {
     const [pythonFile, configResponse] = await Promise.all([
       fetch("flamapy/flamapy_ide.py"),
       fetch("flamapy/plugins.conf.json"),
@@ -19,27 +28,21 @@ class Flamapy {
     const pyodideInstance = await loadPyodide({ indexURL: "pyodide" });
     await pyodideInstance.loadPackage("micropip");
 
-    // Load pyodide_packages declared by enabled plugins (e.g. python-sat)
-    const pyodidePackages = [];
-    for (const [, plugin] of Object.entries(this.pluginsConfig.plugins)) {
-      if (plugin.enabled && plugin.pyodide_packages) {
-        pyodidePackages.push(...plugin.pyodide_packages);
-      }
-    }
+    const plugins = Flamapy.bootPlugins(this.pluginsConfig, choices);
+    this.bootedPlugins = plugins.map((plugin) => plugin.key);
+
+    // Packages Pyodide serves itself (e.g. python-sat), then the wheels: core + plugins.
+    const pyodidePackages = plugins.flatMap((plugin) => plugin.pyodidePackages ?? []);
     if (pyodidePackages.length > 0) {
       await pyodideInstance.loadPackage(pyodidePackages);
     }
-
-    // Build the micropip install list: core wheels + enabled plugin wheels
-    const allWheels = [...this.pluginsConfig.core.wheels];
-    for (const [, plugin] of Object.entries(this.pluginsConfig.plugins)) {
-      if (plugin.enabled) {
-        allWheels.push(...plugin.wheels);
-      }
-    }
+    const allWheels = [
+      ...this.pluginsConfig.core.wheels,
+      ...plugins.flatMap((plugin) => plugin.wheels),
+    ];
 
     const installStatements = allWheels
-      .map((w) => `await micropip.install("flamapy/${w}", deps=False)`)
+      .map((w) => `await micropip.install(${JSON.stringify(Flamapy.wheelRef(w))}, deps=False)`)
       .join("\n");
 
     await pyodideInstance.runPythonAsync(`
@@ -53,8 +56,14 @@ ${installStatements}
     this.pyodide = pyodideInstance;
   }
 
+  // A served wheel ("flamapy/<file>") or an absolute URL as is.
+  static wheelRef(wheel) {
+    return wheel.includes("://") ? wheel : `flamapy/${wheel}`;
+  }
+
+  // The plugins.conf.json the worker booted from, plus which plugins it installed.
   getPluginsConfig() {
-    return this.pluginsConfig;
+    return { ...this.pluginsConfig, bootedPlugins: this.bootedPlugins };
   }
 
   // Capability catalog (solver backends + analysis/structural operations) derived

@@ -3,6 +3,12 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createWorkbench, type FlamapyPlugin } from '@flamapy/ide-plugin-api';
+import {
+  Catalog,
+  EngineWorker,
+  type EngineWorkerService,
+  type FlamapyPluginInfo,
+} from '@flamapy/plugin-flamapy-engine';
 
 import { createPluginsView } from './PluginsView';
 
@@ -27,15 +33,49 @@ const broken: FlamapyPlugin = {
   },
 };
 
-async function setup() {
+function info(overrides: Partial<FlamapyPluginInfo> & { key: string }): FlamapyPluginInfo {
+  return {
+    label: overrides.key.toUpperCase(),
+    backend: overrides.key,
+    description: `${overrides.key} backend`,
+    preinstalled: false,
+    available: true,
+    installed: false,
+    loaded: false,
+    ...overrides,
+  };
+}
+
+/** A stand-in for the flamapy engine's worker service, as the Plugins view uses it. */
+function fakeEngine() {
+  return {
+    isLoaded: true,
+    onStateChange: () => ({ dispose() {} }),
+    flamapyPlugins: () => [
+      info({ key: 'sat', label: 'SAT', preinstalled: true, installed: true, loaded: true, repository: 'https://github.com/flamapy/pysat_metamodel' }),
+      info({ key: 'sdd', label: 'SDD' }),
+      info({ key: 'dnnf', label: 'd-DNNF', available: false, note: 'Needs d4.' }),
+    ],
+    urlPythonPlugins: () => [{ wheelRefs: ['https://example.org/flamapy_cool-1.0-py3-none-any.whl'] }],
+    installFlamapyPlugin: vi.fn(async () => {}),
+    removeFlamapyPlugin: vi.fn(async () => {}),
+    installPythonPlugin: vi.fn(async () => {}),
+    removePythonPlugin: vi.fn(async () => {}),
+  } as unknown as EngineWorkerService & Record<string, ReturnType<typeof vi.fn>>;
+}
+
+async function setup(options: { engine?: EngineWorkerService } = {}) {
   const workbench = createWorkbench('', { host: { log: () => {} } });
+  if (options.engine) {
+    workbench.services.provide(EngineWorker, options.engine);
+    workbench.services.provide(Catalog, { onDidChange: () => ({ dispose() {} }) } as never);
+  }
   workbench.host.register(tool);
   workbench.host.register(broken);
   await workbench.host.activateAll();
-  const onManageFlamapyPlugins = vi.fn();
-  const PluginsView = createPluginsView(workbench, { onManageFlamapyPlugins });
+  const PluginsView = createPluginsView(workbench);
   render(<PluginsView />);
-  return { workbench, onManageFlamapyPlugins };
+  return { workbench };
 }
 
 afterEach(cleanup);
@@ -78,9 +118,49 @@ describe('Plugins view', () => {
     expect(workbench.host.get('acme.tool')?.state).toBe('active');
   });
 
-  it('sends users to the flamapy plugin manager for Python plugins', async () => {
-    const { onManageFlamapyPlugins } = await setup();
-    fireEvent.click(screen.getByRole('button', { name: 'Manage flamapy plugins…' }));
-    expect(onManageFlamapyPlugins).toHaveBeenCalledOnce();
+  it('says so when the flamapy engine plugin is off', async () => {
+    await setup();
+    expect(screen.getByText(/The flamapy analysis engine is turned off/)).toBeTruthy();
+  });
+
+  it('shows flamapy plugins with the same cards, preinstalled ones like any other', async () => {
+    await setup({ engine: fakeEngine() });
+    const group = screen.getByRole('region', { name: 'flamapy plugins' });
+    const sat = within(group).getByRole('article', { name: 'SAT' });
+    expect(within(sat).getByText('Installed')).toBeTruthy();
+    expect(within(sat).getByText('Preinstalled')).toBeTruthy();
+    expect(within(sat).getByText('Source code ↗').getAttribute('href')).toBe(
+      'https://github.com/flamapy/pysat_metamodel',
+    );
+    const dnnf = within(group).getByRole('article', { name: 'd-DNNF' });
+    expect(within(dnnf).getByText('Not available in the browser')).toBeTruthy();
+    expect(within(dnnf).getByRole('switch').hasAttribute('disabled')).toBe(true);
+    expect(within(group).getByRole('article', { name: 'flamapy_cool' })).toBeTruthy();
+  });
+
+  it('installs and removes flamapy plugins with the switch, confirming removals', async () => {
+    const engine = fakeEngine();
+    await setup({ engine });
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const group = screen.getByRole('region', { name: 'flamapy plugins' });
+
+    await act(async () => {
+      fireEvent.click(within(within(group).getByRole('article', { name: 'SDD' })).getByRole('switch'));
+    });
+    expect(engine.installFlamapyPlugin).toHaveBeenCalledWith('sdd');
+
+    await act(async () => {
+      fireEvent.click(within(within(group).getByRole('article', { name: 'SAT' })).getByRole('switch'));
+    });
+    expect(confirm).toHaveBeenCalledWith(expect.stringMatching(/restarts/));
+    expect(engine.removeFlamapyPlugin).toHaveBeenCalledWith('sat');
+
+    await act(async () => {
+      fireEvent.click(
+        within(within(group).getByRole('article', { name: 'flamapy_cool' })).getByRole('button', { name: 'Remove' }),
+      );
+    });
+    expect(engine.removePythonPlugin).toHaveBeenCalledOnce();
+    confirm.mockRestore();
   });
 });
