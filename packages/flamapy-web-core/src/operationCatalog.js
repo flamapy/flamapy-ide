@@ -2,24 +2,26 @@
 // (public/flamapy/flamapy_ide.py get_plugin_catalog) into the operation lists the
 // toolbar renders. The bridge is the single source of truth for *which backends*
 // implement *which operations*; this module only layers on the IDE's presentation
-// (nice labels, input prompts, menu order) and the one legacy operation that has a
-// bespoke modal instead of a facade method.
+// (nice labels, input prompts, menu order). Attribute optimization, which has a
+// dedicated dialog instead of a facade method, is contributed to the Analysis menu by
+// the plugin that implements it (plugin-view-charts), so it is listed only while that
+// plugin is active.
 //
 // Design: a third-party plugin installed at runtime must surface without an IDE
 // edit. So an analysis operation is shown when EITHER it is in the curated UI map
 // below (the built-in surface, kept byte-identical to the pre-catalog table) OR it
-// is contributed by a backend that is not one of the boot-bundled defaults — i.e.
-// it came from an installed extra plugin. Framework operations that exist but were
-// never exposed in the IDE (product_distribution, language_level, …) therefore stay
-// hidden for the default backends, yet a new plugin's novel operations appear.
+// is contributed by a backend outside CURATED_BACKENDS. Framework operations that exist
+// but were never exposed in the IDE (product_distribution, language_level, …) therefore
+// stay hidden for the curated backends, yet any other plugin's operations appear.
 
-// Backends bundled and enabled at boot (public/flamapy/plugins.conf.json). Their
-// operation surface is curated; only operations in OPERATION_UI show for them.
-const DEFAULT_BACKENDS = new Set(["sat", "bdd", "z3"]);
+// flamapy's core solvers, whose operation surface is curated: only operations in
+// OPERATION_UI show for them. This is presentation only: how a plugin is installed
+// (preinstalled or not, see plugins.conf.template.json) plays no part.
+const CURATED_BACKENDS = new Set(["sat", "bdd", "z3"]);
 
-// Presentation for the built-in operations, keyed by facade method name. `input`
-// mirrors the extra-argument contract executeAction expects:
-// { kind: "feature"|"integer", arg, prompt, min? }. Order here is menu order.
+// Presentation for the built-in operations, keyed by facade method name. `inputs` are
+// InputSpecs (see @flamapy/ide-plugin-api): the fields of the shell's input form. A
+// curated entry's inputs replace the ones the bridge derives. Order here is menu order.
 const OPERATION_UI = {
   // Structural (no backend, always available)
   metrics: { label: "Metrics" },
@@ -32,7 +34,7 @@ const OPERATION_UI = {
   estimated_number_of_configurations: { label: "Estimated configurations" },
   feature_ancestors: {
     label: "Feature ancestors",
-    input: { kind: "feature", arg: "feature_name", prompt: "Select a feature" },
+    inputs: [{ name: "feature_name", kind: "feature", label: "Select a feature", required: true }],
   },
 
   // Analysis (backend-implemented)
@@ -44,7 +46,7 @@ const OPERATION_UI = {
   false_optional_features: { label: "False optional features" },
   sampling: {
     label: "Sampling",
-    input: { kind: "integer", arg: "size", prompt: "Sample size", min: 1 },
+    inputs: [{ name: "size", kind: "integer", label: "Sample size", min: 1, default: 1, required: true }],
   },
   backbone: { label: "Backbone" },
   unique_features: { label: "Unique features" },
@@ -54,17 +56,21 @@ const OPERATION_UI = {
   variability: { label: "Variability" },
   configurations_with_n_features: {
     label: "Configurations with N features",
-    input: { kind: "integer", arg: "n", prompt: "Number of selected features", min: 0 },
+    inputs: [
+      { name: "n", kind: "integer", label: "Number of selected features", min: 0, default: 0, required: true },
+    ],
   },
   all_feature_bounds: { label: "Feature bounds (all)" },
   feature_bounds: {
     label: "Feature bounds",
-    input: { kind: "feature", arg: "variable_name", prompt: "Select a feature" },
+    inputs: [{ name: "variable_name", kind: "feature", label: "Select a feature", required: true }],
   },
   minimum_configuration: { label: "Minimum configuration" },
   t_wise_sampling: {
     label: "T-wise sampling",
-    input: { kind: "integer", arg: "t", prompt: "t (interaction strength)", min: 1 },
+    inputs: [
+      { name: "t", kind: "integer", label: "t (interaction strength)", min: 1, default: 1, required: true },
+    ],
   },
 };
 
@@ -83,47 +89,38 @@ const ANALYSIS_ORDER = [
   "feature_bounds", "minimum_configuration", "t_wise_sampling",
 ];
 
-// Attribute optimization is not a facade method: it opens a dedicated modal
-// (executeAction branches on engine === "legacy"). SAT does single-objective
-// MaxSAT, Z3 multi-objective; backendAware is derived from its two backends.
-const LEGACY_ANALYSIS = [
-  {
-    value: "AttributeOptimization",
-    label: "Attribute optimization",
-    engine: "legacy",
-    backends: ["sat", "z3"],
-  },
-];
-
 function humanize(name) {
   const s = name.replace(/_/g, " ");
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-// Convert a catalog operation's inputs (0..1 used by the UI) into the singular
-// `input` object executeAction consumes. The curated `ui.input` wins; otherwise it
-// is derived best-effort from the descriptor (feature vs numeric argument).
-function inputFor(op, ui) {
-  if (ui?.input) return ui.input;
-  const first = op.inputs?.[0];
-  if (!first) return undefined;
-  return {
-    kind: first.kind === "feature" ? "feature" : "integer",
-    arg: first.name,
-    prompt: humanize(first.name),
-  };
+const INPUT_KINDS = new Set([
+  "integer", "number", "string", "boolean", "feature", "features", "attribute", "attributes", "enum",
+]);
+
+// The input form fields of a catalog operation: the curated ones, or every input the
+// bridge reports (an older bridge's "scalar" kind becomes a text field).
+function inputsFor(op, ui) {
+  if (ui?.inputs) return ui.inputs;
+  return (op.inputs || []).map((input) => ({
+    ...input,
+    kind: INPUT_KINDS.has(input.kind) ? input.kind : "string",
+    label: input.label ?? humanize(input.name),
+    required: Boolean(input.required),
+  }));
 }
 
 function toAction(op) {
   const ui = OPERATION_UI[op.method];
   const backends = op.backends || [];
-  const input = inputFor(op, ui);
+  const inputs = inputsFor(op, ui);
   return {
     method: op.method,
     label: ui?.label ?? op.label ?? humanize(op.method),
     backends,
     backendAware: backends.length > 1,
-    ...(input ? { input } : {}),
+    ...(op.doc ? { title: op.doc } : {}),
+    ...(inputs.length > 0 ? { inputs } : {}),
   };
 }
 
@@ -167,13 +164,8 @@ export function analysisOperationsForSolver(catalog, solver) {
   const ops = (catalog?.operations || []).filter((op) => {
     if (op.structural || !op.backends?.includes(solver)) return false;
     const curated = Boolean(OPERATION_UI[op.method]);
-    const fromExtra = op.backends.some((b) => !DEFAULT_BACKENDS.has(b));
+    const fromExtra = op.backends.some((b) => !CURATED_BACKENDS.has(b));
     return curated || fromExtra;
   });
-  const actions = sortByOrder(ops.map(toAction), ANALYSIS_ORDER);
-  const legacy = LEGACY_ANALYSIS.filter((op) => op.backends.includes(solver)).map((op) => ({
-    ...op,
-    backendAware: op.backends.length > 1,
-  }));
-  return [...actions, ...legacy];
+  return sortByOrder(ops.map(toAction), ANALYSIS_ORDER);
 }

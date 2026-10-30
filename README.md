@@ -30,6 +30,9 @@ FlamapyIDE is a web application for editing, visualizing, and performing Automat
 
 ## Features
 
+- **Plugin workbench (v3)** — the shell owns the editor, tabs, document and plugin
+  host; the analysis engine, every visualization and the configurator are plugins. Third-party plugins can even load from remote URLs
+  (experimental). See [docs/plugin-authoring.md](docs/plugin-authoring.md)
 - **UVL editor** with syntax highlighting and real-time validation
 - **Graphical visualization** of the feature model tree and constraints
 - **Structural operations** (no solver needed): metrics, atomic sets, variation points, leaf features, max depth, estimated configurations, and more
@@ -117,7 +120,7 @@ Use the **View** section in the toolbar to switch between:
 | **Metrics > Feature Prob.** | Bar chart of feature inclusion probabilities (dead, optional, and core features highlighted) |
 | **Metrics > Feature Flow Map** | Tree map of a chosen numerical attribute's value across the feature hierarchy |
 
-> The Config. Distribution and Feature Prob. views require the BDD plugin to be enabled and a valid model to be loaded.
+> The Config. Distribution and Feature Prob. views require the BDD plugin to be installed (it is by default) and a valid model to be loaded.
 
 ---
 
@@ -138,7 +141,7 @@ Operations are grouped by what they need. Results appear in the **Output** panel
 | Estimated configurations | Upper-bound estimate of the configuration space |
 | Feature ancestors | Ancestors of a chosen feature |
 
-**Solver operations** — pick a solver (**SAT**, **BDD**, or **Z3**, whichever are enabled) and an operation. The dropdown only lists operations the selected solver actually supports; when more than one solver implements an operation, the chosen solver is used as the backend.
+**Solver operations** — pick a solver (**SAT**, **BDD** and **Z3** come preinstalled; more can be installed in the Plugins view, under *flamapy plugins*) and an operation. The dropdown only lists operations the selected solver actually supports; when more than one solver implements an operation, the chosen solver is used as the backend.
 
 | Operation | Solvers | Description |
 |-----------|---------|-------------|
@@ -327,7 +330,7 @@ Python wheels served to Pyodide are stored in `public/flamapy/`. To update them 
 make build-wheels
 ```
 
-`plugins.conf.json` is the single source of truth for which wheels are loaded. To remove wheels that are no longer listed there without re-downloading:
+`plugins.conf.template.json` (tracked) lists the core wheels and every flamapy plugin the IDE knows, each with a `preinstalled` flag: SAT, BDD and Z3 are preinstalled, the others (SDD, #SAT, …) are installed by users in the Plugins view (puzzle icon), under *flamapy plugins*. All of them follow the same rule — a plugin boots when the user installed it, or when it is preinstalled and the user hasn't removed it. `make build-wheels` resolves the template into the served, versioned `plugins.conf.json` (gitignored). To remove wheels that are no longer listed there without re-downloading:
 
 ```bash
 make clean-old-wheels

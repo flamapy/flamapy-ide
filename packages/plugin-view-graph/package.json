@@ -1,0 +1,16 @@
+{
+  "name": "@flamapy/plugin-view-graph",
+  "version": "3.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "description": "Feature-model graph view plugin (react-d3-tree via @flamapy/web-ui).",
+  "dependencies": {
+    "@flamapy/ide-plugin-api": "*",
+    "@flamapy/plugin-flamapy-engine": "*",
+    "@flamapy/web-ui": "*"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0"
+  }
+}

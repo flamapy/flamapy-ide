@@ -17,6 +17,7 @@ function UVLEditor({
   hide,
   collabConfig,
   onEditorMount,
+  onContentChange,
   darkMode,
 }) {
   const collabRefs = useRef({ provider: null, ydoc: null });
@@ -27,7 +28,14 @@ function UVLEditor({
   validateRef.current = validateModel;
   const debounceTimerRef = useRef(null);
 
-  function handleChange() {
+  // Keep the latest onContentChange too (same reason as validateModel).
+  const contentChangeRef = useRef(onContentChange);
+  contentChangeRef.current = onContentChange;
+
+  function handleChange(value) {
+    // Immediate: the shell's document store mirrors every keystroke (undebounced) so
+    // other views always read current text. Validation stays debounced below.
+    contentChangeRef.current?.(value ?? editorRef.current?.getValue() ?? "");
     clearTimeout(debounceTimerRef.current);
     debounceTimerRef.current = setTimeout(
       () => validateRef.current(),

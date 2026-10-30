@@ -1,6 +1,7 @@
 /* eslint-disable react/prop-types */
 import { useState } from "react";
-import { Modal } from "@flamapy/web-ui";
+// Direct file import: the web-ui barrel pulls monaco (untestable in node).
+import Modal from "@flamapy/web-ui/src/ui/Modal.jsx";
 import { DEFAULT_REST_URL } from "@flamapy/web-core";
 
 // Lets the user point the "Remote API" compute backend at a flamapy-rest server.

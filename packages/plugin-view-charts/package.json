@@ -1,0 +1,16 @@
+{
+  "name": "@flamapy/plugin-view-charts",
+  "version": "3.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "description": "Chart view plugins: configuration distribution, feature inclusion probabilities (BDD-gated) and the Pareto front of attribute optimization.",
+  "dependencies": {
+    "@flamapy/ide-plugin-api": "*",
+    "@flamapy/plugin-flamapy-engine": "*",
+    "@flamapy/web-ui": "*"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0"
+  }
+}

@@ -9,6 +9,7 @@ from flamapy.metamodels.fm_metamodel.transformations import GlencoeReader, AFMRe
 from flamapy.metamodels.configurator_metamodel.transformation import FmToConfigurator
 from flamapy.metamodels.fm_metamodel.operations import FMLanguageLevel
 from flamapy.metamodels.fm_metamodel.models import AttributeType
+from flamapy.metamodels.configuration_metamodel.models import Configuration
 
 try:
     from flamapy.metamodels.z3_metamodel.transformations import FmToZ3
@@ -152,17 +153,57 @@ def _humanize_operation(name: str) -> str:
 
 
 def _input_kind(inp) -> str:
-    """Map a framework Input to a UI input kind: 'integer', 'feature', or 'scalar'.
+    """Map a framework Input to the IDE's InputSpec kind (see @flamapy/ide-plugin-api).
 
-    The framework does not tag an input as "a feature name", so it is inferred from
-    the type (int -> integer) and a name convention; the IDE only needs this to pick
-    a number field vs a feature picker, and unknown inputs fall back to a text field.
+    The framework does not tag an input as "a feature name", so features are inferred
+    from a name convention; everything else follows the Python type. Unknown types fall
+    back to a text field.
     """
+    import typing
+
+    origin = typing.get_origin(inp.type) or inp.type
+    names_feature = (
+        inp.name.endswith("_name") or inp.name.endswith("_names")
+        or "feature" in inp.name or inp.name in ("variable", "variables")
+    )
+    if inp.type is bool:
+        return "boolean"
     if inp.type is int:
         return "integer"
-    if inp.name.endswith("_name") or inp.name in ("feature", "variable"):
+    if inp.type is float:
+        return "number"
+    if origin in (list, tuple, set, frozenset):
+        return "features" if names_feature else "string"
+    if names_feature:
         return "feature"
-    return "scalar"
+    return "string"
+
+
+def _json_safe(value):
+    """Plain JSON data for a facade result: containers recursed, other objects as str."""
+    if value is None or isinstance(value, (bool, int, str)):
+        return value
+    if isinstance(value, float):
+        return value if math.isfinite(value) else str(value)
+    if isinstance(value, dict):
+        return {str(k): _json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple, set, frozenset)):
+        return [_json_safe(v) for v in value]
+    return str(value)
+
+
+def _input_spec(inp) -> dict:
+    """One InputSpec for the IDE's input form, from a framework Input."""
+    spec = {
+        "name": inp.name,
+        "kind": _input_kind(inp),
+        "label": _humanize_operation(inp.name),
+        "required": bool(inp.required),
+    }
+    default = _json_safe(inp.default)
+    if default is not None and not isinstance(default, (list, dict)):
+        spec["default"] = default
+    return spec
 
 
 def _catalog_from_discovery(dm: DiscoverMetamodels) -> dict:
@@ -172,7 +213,8 @@ def _catalog_from_discovery(dm: DiscoverMetamodels) -> dict:
     backend tokens that implement it (derived, since the descriptor's ``backends``
     field is not populated in flamapy 2.6). Only analysis operations ('operation'
     kind, no configuration input) are included; producers, transformers and
-    configuration-driven operations are surfaced through their own dedicated UI.
+    configuration-driven operations are surfaced through their own dedicated UI. Operations
+    taking a file input are left out too: a server path means nothing in the browser.
     """
     plugins: dict[str, dict] = {}   # backend token -> {name, extension}
     operations = []
@@ -189,7 +231,7 @@ def _catalog_from_discovery(dm: DiscoverMetamodels) -> dict:
     for name, descriptor in dm.available_operations().items():
         if descriptor.kind != 'operation':
             continue
-        if any(inp.kind == 'configuration' for inp in descriptor.inputs):
+        if any(inp.kind in ('configuration', 'file') for inp in descriptor.inputs):
             continue
 
         backends = []
@@ -209,14 +251,8 @@ def _catalog_from_discovery(dm: DiscoverMetamodels) -> dict:
             "structural": len(backends) == 0,
             "backends": backends,
             "selectableBackend": bool(descriptor.selectable_backend),
-            "inputs": [
-                {
-                    "name": inp.name,
-                    "kind": _input_kind(inp),
-                    "required": bool(inp.required),
-                }
-                for inp in descriptor.inputs
-            ],
+            "inputs": [_input_spec(inp) for inp in descriptor.inputs],
+            "doc": (descriptor.doc or "").strip(),
         })
 
     catalog_plugins = [
@@ -267,6 +303,12 @@ def _facade_display_item(item):
     return str(item)
 
 
+_NOT_COMPUTED = (
+    "The operation could not be computed. The required plugin may be "
+    "unavailable or the operation may not be supported for this model."
+)
+
+
 def _serialize_facade_result(result):
     """JSON-serialize any facade result for display in the IDE output panel.
 
@@ -274,10 +316,7 @@ def _serialize_facade_result(result):
     plugin or unsupported model); that is surfaced as a readable message.
     """
     if result is None:
-        return json.dumps(
-            "The operation could not be computed. The required plugin may be "
-            "unavailable or the operation may not be supported for this model."
-        )
+        return json.dumps(_NOT_COMPUTED)
     if isinstance(result, bool) or isinstance(result, (int, float, str)):
         return json.dumps(result)
     if isinstance(result, dict):
@@ -289,18 +328,109 @@ def _serialize_facade_result(result):
     return json.dumps(str(result))
 
 
-def execute_facade_operation(name: str, args_json: str = "{}"):
+def _cell(value):
+    """One table cell: scalars as they are, collections joined, other objects as text."""
+    if value is None or isinstance(value, (bool, int, str)):
+        return value
+    if isinstance(value, float):
+        return value if math.isfinite(value) else str(value)
+    if isinstance(value, dict):
+        return ", ".join("{}: {}".format(k, _cell(v)) for k, v in value.items())
+    if isinstance(value, (list, tuple, set, frozenset)):
+        return ", ".join(str(_cell(v)) for v in value)
+    return str(value)
+
+
+def _is_selection(value) -> bool:
+    """A configuration given as a plain {feature: selected} dict (e.g. sampling's results)."""
+    return isinstance(value, dict) and bool(value) and all(isinstance(v, bool) for v in value.values())
+
+
+def _configuration_view(configuration) -> dict:
+    """A configuration as selected / deselected feature names (typed ones as `name = value`),
+    in the model's feature order."""
+    elements = configuration.elements if isinstance(configuration, Configuration) else configuration
+    order = {}
+    if fm is not None:
+        order = {feature.name: i for i, feature in enumerate(fm.fm_model.get_features())}
+    selected, deselected = [], []
+    for element, value in sorted(elements.items(), key=lambda item: order.get(str(item[0]), len(order))):
+        if value is False:
+            deselected.append(str(element))
+        elif value is True or value is None:
+            selected.append(str(element))
+        else:
+            selected.append("{} = {}".format(element, value))
+    view = {"selected": selected}
+    if deselected:
+        view["deselected"] = deselected
+    return view
+
+
+def _records_table(records, names=None) -> dict:
+    """A table of dict records, a column per key (first-seen order); `names` adds a Name column."""
+    keys = list(dict.fromkeys(key for record in records for key in record))
+    columns = [_humanize_operation(str(k)) for k in keys]
+    rows = [[_cell(record.get(key)) for key in keys] for record in records]
+    if names is not None:
+        columns = ["Name", *columns]
+        rows = [[str(name), *row] for name, row in zip(names, rows)]
+    return {"kind": "table", "columns": columns, "rows": rows}
+
+
+def _result_view(name: str, result) -> dict:
+    """A facade result as an OperationResult (see @flamapy/ide-plugin-api), so the IDE
+    shows flamapy's operations with the same views as plugin operations: configurations,
+    tables, or text."""
+    if result is None:
+        return {"kind": "text", "value": _NOT_COMPUTED}
+    if isinstance(result, Configuration):
+        return {"kind": "configuration", **_configuration_view(result)}
+    if isinstance(result, dict):
+        if result and all(isinstance(v, dict) for v in result.values()):
+            return _records_table(list(result.values()), names=list(result))
+        return {
+            "kind": "table",
+            "columns": ["Name", _humanize_operation(name)],
+            "rows": [[str(k), _cell(v)] for k, v in result.items()],
+        }
+    if isinstance(result, (list, set, frozenset)):
+        items = list(result)
+        if items and all(isinstance(i, Configuration) or _is_selection(i) for i in items):
+            return {"kind": "configurations",
+                    "configurations": [_configuration_view(i) for i in items]}
+        if items and all(isinstance(i, dict) for i in items):
+            return _records_table(items)
+        return {"kind": "table", "columns": [_humanize_operation(name)],
+                "rows": [[_cell(i)] for i in items]}
+    return {"kind": "text", "value": str(_cell(result))}
+
+
+def execute_facade_operation(
+    name: str, args_json: str = "{}", with_data: bool = False, as_view: bool = False
+):
     """Run any FLAMAFeatureModel facade method by name and JSON-serialize its result.
 
     ``args_json`` is a JSON object whose keys are forwarded as keyword arguments
     (e.g. {"backend": "sat"}). The facade hides backend selection and result
     post-processing, so this single dispatcher replaces the per-backend routing.
+
+    With ``with_data`` the result is ``{"display": <as without>, "data": <the raw
+    result as plain JSON>}``, so IDE plugins get structured results, not display text.
+    With ``as_view`` it is an OperationResult for the IDE's output panel.
     """
     args = json.loads(args_json) if args_json else {}
     method = getattr(fm, name, None)
     if not callable(method):
-        return json.dumps("Unknown operation '{}'.".format(name))
-    return _serialize_facade_result(method(**args))
+        message = "Unknown operation '{}'.".format(name)
+        return json.dumps({"kind": "text", "value": message} if as_view else message)
+    result = method(**args)
+    if as_view:
+        return json.dumps(_result_view(name, result))
+    display = _serialize_facade_result(result)
+    if not with_data:
+        return display
+    return json.dumps({"display": json.loads(display), "data": _json_safe(result)})
 
 
 def execute_facade_operation_with_config(

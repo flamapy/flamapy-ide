@@ -1,6 +1,40 @@
 /* eslint-disable react/prop-types */
+import { useState } from "react";
 import { ResizableBox } from "react-resizable";
 import { Spinner } from "@flamapy/web-ui";
+
+// The output as plain text: a structured result's own copy text, else the text shown.
+function outputText(output) {
+  if (output.copyText !== undefined) return output.copyText;
+  if (output.result == null) return "";
+  return Array.isArray(output.result) ? output.result.map(String).join("\n") : String(output.result);
+}
+
+function CopyButton({ text }) {
+  const [status, setStatus] = useState(null);
+  const flash = (next) => {
+    setStatus(next);
+    setTimeout(() => setStatus(null), 1500);
+  };
+  return (
+    <button
+      onClick={() => {
+        navigator.clipboard
+          ?.writeText(text)
+          .then(() => flash("Copied"))
+          .catch(() => flash("Couldn't copy"));
+      }}
+      title="Copy the result to the clipboard"
+      className="flex items-center gap-1 px-2 py-0.5 text-[11px] rounded text-gray-500 dark:text-gray-400 hover:bg-black/[.06] dark:hover:bg-white/10 hover:text-gray-800 dark:hover:text-gray-100"
+    >
+      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="9" y="9" width="11" height="11" rx="2" strokeWidth={2} />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15V5a2 2 0 012-2h10" />
+      </svg>
+      {status ?? "Copy"}
+    </button>
+  );
+}
 
 // VSCode-style bottom panel with OUTPUT / PROBLEMS tabs. Replaces the standalone
 // ExecutionOutput: OUTPUT renders the latest operation result (with the Stop button
@@ -61,6 +95,7 @@ function BottomPanel({
             <Tab id="problems" label="Problems" badge={problemCount} />
           </div>
           <div className="flex items-center gap-2 pr-1">
+            {panelTab === "output" && !isAwaiting && outputText(output) && <CopyButton text={outputText(output)} />}
             {isAwaiting && <Spinner />}
             {isAwaiting && (
               <button
@@ -82,7 +117,10 @@ function BottomPanel({
               {output.label}
             </div>
             <div className="font-mono text-[12.5px] mt-1 overflow-auto flex-1 text-gray-700 dark:text-gray-300">
-              {output.result == null ||
+              {output.view ? (
+                // A structured result (table, configuration, ...) rendered by the shell.
+                <div className="font-sans">{output.view}</div>
+              ) : output.result == null ||
               (Array.isArray(output.result) && output.result.length === 0) ? (
                 <div className="text-gray-400 italic">There are no {output.label}.</div>
               ) : Array.isArray(output.result) ? (

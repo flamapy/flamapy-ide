@@ -84,15 +84,46 @@ describe("analysisOperationsForSolver", () => {
     expect(sdd).toContain("satisfiable"); // curated op the extra also implements
   });
 
-  it("carries the curated input contract onto the action", () => {
+  it("carries the curated inputs onto the action", () => {
     const sampling = analysisOperationsForSolver(catalog, "sat").find((o) => o.method === "sampling");
-    expect(sampling.input).toEqual({ kind: "integer", arg: "size", prompt: "Sample size", min: 1 });
+    expect(sampling.inputs).toEqual([
+      { name: "size", kind: "integer", label: "Sample size", min: 1, default: 1, required: true },
+    ]);
   });
 
-  it("appends the legacy attribute-optimization entry for sat and z3 only", () => {
-    expect(analysisOperationsForSolver(catalog, "sat").some((o) => o.value === "AttributeOptimization")).toBe(true);
-    expect(analysisOperationsForSolver(catalog, "z3").some((o) => o.value === "AttributeOptimization")).toBe(true);
-    expect(analysisOperationsForSolver(catalog, "bdd").some((o) => o.value === "AttributeOptimization")).toBe(false);
+  it("derives every input of a plugin operation, with its doc as the tooltip", () => {
+    const withPlugin = {
+      ...catalog,
+      plugins: [...catalog.plugins, { backend: "fmcooler", name: "fmcooler_metamodel", extension: "fmcooler" }],
+      operations: [
+        ...catalog.operations,
+        {
+          method: "fmcooler_optimization",
+          operation: "FMCoolerOptimization",
+          structural: false,
+          backends: ["fmcooler"],
+          doc: "Optimise a configuration with simulated annealing.",
+          inputs: [
+            { name: "criteria", kind: "string", label: "Criteria", required: true },
+            { name: "reads", kind: "integer", label: "Reads", required: false, default: 100 },
+            { name: "legacy", kind: "scalar", required: false },
+          ],
+        },
+      ],
+    };
+    const [op] = analysisOperationsForSolver(withPlugin, "fmcooler");
+    expect(op.title).toBe("Optimise a configuration with simulated annealing.");
+    expect(op.inputs).toEqual([
+      { name: "criteria", kind: "string", label: "Criteria", required: true },
+      { name: "reads", kind: "integer", label: "Reads", required: false, default: 100 },
+      { name: "legacy", kind: "string", label: "Legacy", required: false },
+    ]);
+  });
+
+  it("leaves attribute optimization to the plugin that contributes it", () => {
+    for (const solver of ["sat", "z3", "bdd"]) {
+      expect(analysisOperationsForSolver(catalog, solver).some((o) => o.label === "Attribute optimization")).toBe(false);
+    }
   });
 
   it("returns nothing when no solver is selected", () => {

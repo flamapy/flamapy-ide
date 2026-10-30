@@ -5,7 +5,7 @@ export default {
   theme: {
     extend: {
       colors: {
-        // VSCode-style / featuredraw surfaces (light theme defaults).
+        // VSCode-style surfaces (light theme defaults).
         surface: "#f6f7f9", // app body background
         panel: "#f3f4f6", // side / right panels
         tabbar: "#eceef2", // editor tab strip

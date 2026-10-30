@@ -1,0 +1,46 @@
+{
+  "name": "@flamapy/ide-plugin-api",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "The flamapy-ide plugin contract: manifest and lifecycle types, the plugin host, the typed service registry, the remote plugin loader, and a test kit (@flamapy/ide-plugin-api/testing).",
+  "license": "LGPL-3.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/flamapy/flamapy-ide.git",
+    "directory": "packages/ide-plugin-api"
+  },
+  "homepage": "https://github.com/flamapy/flamapy-ide/blob/develop/docs/plugin-authoring.md",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./testing": {
+      "types": "./dist/testing/index.d.ts",
+      "default": "./dist/testing.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "vite build && tsc -p tsconfig.build.json",
+    "prepack": "npm run build"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "peerDependencies": {
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0"
+  },
+  "peerDependenciesMeta": {
+    "react-dom": {
+      "optional": true
+    }
+  }
+}

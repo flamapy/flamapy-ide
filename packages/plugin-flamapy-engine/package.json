@@ -1,0 +1,15 @@
+{
+  "name": "@flamapy/plugin-flamapy-engine",
+  "version": "3.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "description": "The flamapy analysis engine as a workbench plugin: owns the Pyodide worker, the operation catalog, validation, WASM/REST dispatch and the Python-wheel plugin manager; exposes them as services for the view plugins.",
+  "dependencies": {
+    "@flamapy/ide-plugin-api": "*",
+    "@flamapy/web-core": "*"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0"
+  }
+}

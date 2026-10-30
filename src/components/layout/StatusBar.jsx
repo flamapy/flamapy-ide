@@ -13,6 +13,8 @@ function StatusBar({
   onToggleBackend,
   restApiUrl,
   selectedSolver,
+  extraLeft,
+  extraRight,
 }) {
   const errors = validation?.errors ?? [];
   const warnings = validation?.warnings
@@ -47,9 +49,11 @@ function StatusBar({
             {validation.valid ? "✓ Valid model" : `✗ ${problemCount} problem${problemCount === 1 ? "" : "s"}`}
           </button>
         )}
+        {extraLeft}
       </div>
 
       <div className="flex items-center h-full">
+        {extraRight}
         <button
           className={item}
           onClick={onToggleBackend}

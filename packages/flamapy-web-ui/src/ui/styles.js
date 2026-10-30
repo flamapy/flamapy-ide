@@ -1,4 +1,4 @@
-// Shared VSCode-style / featuredraw-inspired class strings.
+// Shared VSCode-style class strings.
 //
 // These are plain Tailwind class strings (not @apply) so Tailwind's JIT picks
 // them up via the `content` glob. Light surfaces by default with `dark:`

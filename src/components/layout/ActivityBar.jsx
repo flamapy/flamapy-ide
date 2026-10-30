@@ -1,14 +1,15 @@
 /* eslint-disable react/prop-types */
 
-// Thin vertical icon rail (VSCode activity bar). Toggles the side configurator
-// panel and the right model-info panel; at the bottom, a puzzle-piece opens the
-// plugin manager and a gear opens the compute backend settings. Active toggles get
-// the accent left border, like VSCode.
-function RailButton({ active, onClick, title, children }) {
+// Thin vertical icon rail (VSCode activity bar). At the top, one button per side panel
+// contributed by plugins (left-side panels, then right-side ones): each side shows one
+// panel at a time, and the active ones get the accent border. At the bottom, a
+// puzzle-piece opens the Plugins view and a gear opens the compute backend settings.
+function RailButton({ active, onClick, title, label, children }) {
   return (
     <button
       onClick={onClick}
       title={title}
+      aria-label={label ?? title}
       aria-pressed={active}
       className={`relative w-12 h-12 grid place-items-center transition-colors ${
         active
@@ -22,23 +23,49 @@ function RailButton({ active, onClick, title, children }) {
   );
 }
 
-function ActivityBar({ sidebarOpen, onToggleSidebar, modelInfoOpen, onToggleModelInfo, onOpenBackend, onOpenPlugins }) {
+function initials(title) {
+  return title
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((word) => word[0]?.toUpperCase() ?? "")
+    .join("");
+}
+
+function PanelButton({ panel, onToggle }) {
+  const where = panel.side === "left" ? "left" : "right";
   return (
-    <nav className="w-12 shrink-0 flex flex-col items-center justify-between bg-panel dark:bg-gray-900 border-r border-black/10 dark:border-white/10 py-1">
+    <RailButton
+      active={panel.active}
+      onClick={() => onToggle(panel.id)}
+      title={`${panel.title} (${where} side)`}
+      label={panel.title}
+    >
+      {panel.icon ?? <span className="text-[11px] font-semibold">{initials(panel.title)}</span>}
+    </RailButton>
+  );
+}
+
+function ActivityBar({ panels = [], onTogglePanel, onOpenBackend, pluginsOpen, onOpenPlugins }) {
+  const left = panels.filter((panel) => panel.side === "left");
+  const right = panels.filter((panel) => panel.side === "right");
+  return (
+    <nav
+      aria-label="Activity bar"
+      className="w-12 shrink-0 flex flex-col items-center justify-between bg-panel dark:bg-gray-900 border-r border-black/10 dark:border-white/10 py-1"
+    >
       <div className="flex flex-col items-center">
-        <RailButton active={sidebarOpen} onClick={onToggleSidebar} title="Toggle configurator panel">
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 6h16M4 12h10M4 18h7" />
-          </svg>
-        </RailButton>
-        <RailButton active={modelInfoOpen} onClick={onToggleModelInfo} title="Toggle model information panel">
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-        </RailButton>
+        {left.map((panel) => (
+          <PanelButton key={panel.id} panel={panel} onToggle={onTogglePanel} />
+        ))}
+        {left.length > 0 && right.length > 0 && (
+          <div className="w-6 h-px my-1 bg-black/10 dark:bg-white/10" aria-hidden="true" />
+        )}
+        {right.map((panel) => (
+          <PanelButton key={panel.id} panel={panel} onToggle={onTogglePanel} />
+        ))}
       </div>
       <div className="flex flex-col items-center">
-        <RailButton active={false} onClick={onOpenPlugins} title="Manage plugins">
+        <RailButton active={pluginsOpen} onClick={onOpenPlugins} title="Plugins">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M10.5 4.5a1.5 1.5 0 113 0V6h2.25A1.25 1.25 0 0117.25 7.25V9.5h1.5a1.5 1.5 0 010 3h-1.5v3.25A1.25 1.25 0 0116 17h-3.25v-1.5a1.5 1.5 0 00-3 0V17H6.5A1.5 1.5 0 015 15.5V12.5H6.5a1.5 1.5 0 000-3H5V7.25A1.25 1.25 0 016.25 6H10.5V4.5z" />
           </svg>

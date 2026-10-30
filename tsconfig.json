@@ -1,0 +1,18 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "paths": {
+      "@flamapy/ide-plugin-api": ["./packages/ide-plugin-api/src/index.ts"],
+      "@flamapy/ide-plugin-api/testing": ["./packages/ide-plugin-api/src/testing/index.ts"]
+    }
+  },
+  "include": [
+    "packages/ide-plugin-api/src",
+    "packages/plugin-flamapy-engine/src",
+    "packages/plugin-view-graph/src",
+    "packages/plugin-view-charts/src",
+    "packages/plugin-view-flowmap/src",
+    "packages/plugin-configurator/src",
+    "src/workbench"
+  ]
+}

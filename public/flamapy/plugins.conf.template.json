@@ -1,4 +1,5 @@
 {
+  "$comment": "The flamapy plugins the IDE knows, and the core wheels flamapy itself needs. Tracked template: wheels are listed by bare distribution name (e.g. 'flamapy_sat'); `make build-wheels` resolves them to the versioned wheel files and writes the served plugins.conf.json (gitignored). Every plugin follows the same rule: it is installed when the user installed it, or when it is `preinstalled` and the user has not removed it. `available: false` plugins (no Pyodide build yet) are listed with their `note` but can't be installed. Installs use micropip with deps=False, so `wheels` must list every dependency wheel and `pyodidePackages` every package Pyodide serves itself.",
   "core": {
     "wheels": [
       "flamapy_fw",
@@ -12,30 +13,99 @@
       "ply"
     ]
   },
-  "plugins": {
-    "sat": {
-      "enabled": true,
-      "pyodide_packages": [
-        "python-sat"
-      ],
+  "plugins": [
+    {
+      "key": "sat",
+      "label": "SAT",
+      "backend": "sat",
+      "description": "SAT solver backend (flamapy-sat, PySAT): satisfiability, configurations, dead, core and false-optional features, sampling, backbone, diagnosis and attribute optimisation (MaxSAT).",
+      "repository": "https://github.com/flamapy/pysat_metamodel",
+      "preinstalled": true,
+      "available": true,
+      "native": false,
       "wheels": [
         "flamapy_sat"
+      ],
+      "pyodidePackages": [
+        "python-sat"
       ]
     },
-    "bdd": {
-      "enabled": true,
+    {
+      "key": "bdd",
+      "label": "BDD",
+      "backend": "bdd",
+      "description": "Binary Decision Diagram backend (flamapy-bdd, dd): exact configuration counting, uniform sampling, configuration distribution and feature inclusion probabilities.",
+      "repository": "https://github.com/flamapy/bdd_metamodel",
+      "preinstalled": true,
+      "available": true,
+      "native": false,
       "wheels": [
         "flamapy_bdd",
         "dd",
         "astutils"
-      ]
+      ],
+      "pyodidePackages": []
     },
-    "z3": {
-      "enabled": true,
+    {
+      "key": "z3",
+      "label": "Z3",
+      "backend": "z3",
+      "description": "SMT backend (flamapy-z3, Z3) for models with typed (numerical) attributes: analysis, feature bounds and multi-objective attribute optimisation.",
+      "repository": "https://github.com/flamapy/z3_metamodel",
+      "preinstalled": true,
+      "available": true,
+      "native": true,
+      "note": "Z3 compiled to WebAssembly (a large download: about 17 MB).",
       "wheels": [
         "flamapy_z3",
         "z3_solver"
-      ]
+      ],
+      "pyodidePackages": []
+    },
+    {
+      "key": "sdd",
+      "label": "SDD",
+      "backend": "sdd",
+      "description": "Sentential Decision Diagram backend (flamapy-sdd). Adds satisfiable, configurations number, core and dead features via an SDD compilation of the model.",
+      "repository": "https://github.com/flamapy/sdd_metamodel",
+      "preinstalled": false,
+      "available": true,
+      "native": true,
+      "note": "SDD compilation (UCLA libsdd 2.0 via PySDD) compiled to WebAssembly.",
+      "wheels": [
+        "pysdd",
+        "flamapy_sdd"
+      ],
+      "pyodidePackages": []
+    },
+    {
+      "key": "dnnf",
+      "label": "d-DNNF",
+      "backend": "dnnf",
+      "description": "Deterministic Decomposable Negation Normal Form backend (flamapy-dnnf) for exact model counting and related analyses.",
+      "repository": "https://github.com/flamapy/dnnf_metamodel",
+      "preinstalled": false,
+      "available": false,
+      "native": true,
+      "note": "Requires the external d4 compiler invoked via subprocess; not portable to Pyodide (no process spawning in the browser) without porting d4 to wasm and rewriting the plugin to call it in-process.",
+      "wheels": [],
+      "pyodidePackages": []
+    },
+    {
+      "key": "sharpsat",
+      "label": "#SAT",
+      "backend": "sharpsat",
+      "description": "Sharp-SAT backend (flamapy-sharpsat) for (approximate) configuration counting on large models.",
+      "repository": "https://github.com/flamapy/sharpsat_metamodel",
+      "preinstalled": false,
+      "available": true,
+      "native": true,
+      "note": "Approximate counting (ApproxMC) and almost-uniform sampling (UniGen) compiled to WebAssembly.",
+      "wheels": [
+        "pyunigen",
+        "flamapy_sharpsat"
+      ],
+      "pyodidePackages": []
     }
-  }
+  ]
 }

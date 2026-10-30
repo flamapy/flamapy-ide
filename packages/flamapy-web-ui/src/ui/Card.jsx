@@ -1,7 +1,7 @@
 /* eslint-disable react/prop-types */
 import { vsCard, vsCardHeader, vsCardTitle } from "./styles";
 
-// featuredraw-style card: white surface, subtle border, header with an optional
+// Card: white surface, subtle border, header with an optional
 // colored accent bar and a small uppercase title, plus an optional `right` slot.
 function Card({ title, accent, right, children, pad = true, className = "" }) {
   return (

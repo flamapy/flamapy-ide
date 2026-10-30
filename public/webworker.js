@@ -1,8 +1,18 @@
 /* eslint-disable no-undef */
 importScripts("flamapy/flamapy.js");
+// The page passes the user's flamapy plugin choices ({key: installed}) in the URL:
+// webworker.js?plugins=<JSON>. Without them, the preinstalled plugins boot.
+function pluginChoices() {
+  try {
+    return JSON.parse(new URLSearchParams(self.location.search).get("plugins") || "{}");
+  } catch {
+    return {};
+  }
+}
+
 async function loadFlamapyWorker() {
   self.flamapy = new Flamapy();
-  await self.flamapy.loadFlamapy();
+  await self.flamapy.loadFlamapy(pluginChoices());
 }
 let flamapyReadyPromise = loadFlamapyWorker()
   .then(async () =>

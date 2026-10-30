@@ -35,6 +35,7 @@ function ActionToolbar({
   onUvlhub,
   uvlhubMessage,
   collab,
+  children,
 }) {
   return (
     <div className="flex items-center gap-3 px-3 py-1.5 bg-white dark:bg-gray-800 border-b border-black/10 dark:border-white/10 overflow-x-auto whitespace-nowrap shrink-0">
@@ -107,6 +108,9 @@ function ActionToolbar({
           </>
         )}
       </Group>
+
+      {/* Plugin-contributed toolbar menus */}
+      {children}
     </div>
   );
 }

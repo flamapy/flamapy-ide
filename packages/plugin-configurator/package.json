@@ -1,0 +1,18 @@
+{
+  "name": "@flamapy/plugin-configurator",
+  "version": "3.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "description": "Interactive configuration plugin: the wizard view, the configuration tree sidebar with its operations, and the configurator ZIP download.",
+  "dependencies": {
+    "@flamapy/ide-plugin-api": "*",
+    "@flamapy/plugin-flamapy-engine": "*",
+    "@flamapy/web-ui": "*",
+    "file-saver": "^2.0.5",
+    "jszip": "^3.10.1"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0"
+  }
+}

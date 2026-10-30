@@ -168,3 +168,53 @@ def test_feature_tree():
     assert result['attributes']['isMandatory'] == root.is_mandatory(), "isMandatory attribute does not match"
     assert result['attributes']['isOptional'] == root.is_optional(), "isOptional attribute does not match"
     assert result['attributes']['isAbstract'] == root.is_abstract, "isAbstract attribute does not match"
+
+# The catalog describes every input of an operation for the IDE's input form
+# (InputSpec kinds), with the descriptor's doc as the operation's tooltip.
+def test_plugin_catalog_input_specs():
+    from public.flamapy.flamapy_ide import get_plugin_catalog
+    operations = {op['method']: op for op in json.loads(get_plugin_catalog())['operations']}
+    sampling = operations['sampling']
+    assert sampling['inputs'] == [
+        {'name': 'size', 'kind': 'integer', 'label': 'Size', 'required': True},
+        {'name': 'with_replacement', 'kind': 'boolean', 'label': 'With replacement',
+         'required': False, 'default': False},
+    ]
+    assert sampling['doc']
+    assert operations['feature_ancestors']['inputs'][0]['kind'] == 'feature'
+
+
+# with_data returns the display text plus the raw result as plain JSON data.
+def test_execute_facade_operation_with_data():
+    process_uvl_file('./tests/test_models/uvlfile.uvl')
+    plain = json.loads(execute_facade_operation('metrics', '{}'))
+    both = json.loads(execute_facade_operation('metrics', '{}', True))
+    assert both['display'] == plain
+    assert isinstance(both['data'], list) and isinstance(both['data'][0], dict)
+    assert {'name', 'result'} <= set(both['data'][0])
+
+
+# as_view returns an OperationResult, so the output panel shows flamapy's operations with
+# the same views as plugin operations: configurations, tables or text.
+def test_execute_facade_operation_as_view():
+    process_uvl_file('./tests/test_models/uvlfile.uvl')
+    view = lambda name, args={}: json.loads(execute_facade_operation(name, json.dumps(args), False, True))
+    configurations = view('configurations')
+    assert configurations['kind'] == 'configurations'
+    # Features in the model's order, not the solver's.
+    assert {tuple(c['selected']) for c in configurations['configurations']} == {
+        ('A',), ('A', 'C'), ('A', 'B', 'C')}
+    # Sampling yields {feature: bool} dicts: configurations too, with the deselected ones.
+    sample = view('sampling', {'size': 2})
+    assert sample['kind'] == 'configurations'
+    assert all('deselected' in c or len(c['selected']) == 3 for c in sample['configurations'])
+    assert view('minimum_configuration') == {'kind': 'configuration', 'selected': ['A']}
+    assert view('core_features') == {'kind': 'table', 'columns': ['Core features'], 'rows': [['A']]}
+    assert view('dead_features')['rows'] == []
+    probability = view('feature_inclusion_probability')
+    assert probability['columns'] == ['Name', 'Feature inclusion probability']
+    assert ['A', 1.0] in probability['rows']
+    metrics = view('metrics')
+    assert metrics['kind'] == 'table' and metrics['columns'][:2] == ['Name', 'Documentation']
+    assert view('satisfiable') == {'kind': 'text', 'value': 'True'}
+    assert view('no_such_operation') == {'kind': 'text', 'value': "Unknown operation 'no_such_operation'."}

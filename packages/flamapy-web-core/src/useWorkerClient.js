@@ -1,108 +1,39 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 
-function attachHandler(worker, pendingRef, setIsLoaded, setPluginsConfig, setPluginCatalog) {
-  worker.onmessage = (event) => {
-    const { status, exception, msgId, results, error } = event.data;
+import { createWorkerClient } from "./workerClient";
 
-    if (status === "loaded") {
-      setIsLoaded(true);
-      setPluginsConfig(event.data.pluginsConfig ?? null);
-      setPluginCatalog(event.data.pluginCatalog ?? null);
-      return;
-    }
-
-    if (status === "error") {
-      console.error("Flamapy worker failed to load:", exception);
-      for (const { reject } of pendingRef.current.values()) {
-        reject(new Error(exception));
-      }
-      pendingRef.current.clear();
-      return;
-    }
-
-    const pending = pendingRef.current.get(msgId);
-    if (!pending) return;
-    pendingRef.current.delete(msgId);
-    error ? pending.reject(new Error(error)) : pending.resolve(results);
-  };
-}
-
-// Pyodide can interrupt running Python via a SharedArrayBuffer, but SAB needs
-// the page to be cross-origin isolated (COOP/COEP headers — set by the vite dev
-// server and the Docker nginx; NOT available on GitHub Pages). When the buffer
-// is unavailable, interrupt() returns false and callers fall back to a full
-// worker restart.
-function createInterruptBuffer() {
-  if (typeof SharedArrayBuffer === "undefined" || !globalThis.crossOriginIsolated) {
-    return null;
-  }
-  return new Uint8Array(new SharedArrayBuffer(1));
-}
-
+// React wrapper over the framework-free createWorkerClient: same return shape as the
+// pre-v3 hook so existing components keep working unchanged.
 export function useWorkerClient() {
-  const [isLoaded, setIsLoaded] = useState(false);
-  const [pluginsConfig, setPluginsConfig] = useState(null);
-  const [pluginCatalog, setPluginCatalog] = useState(null);
-  const pendingRef = useRef(new Map());
-  const workerRef = useRef(null);
-  const nextIdRef = useRef(0);
-  const interruptBufferRef = useRef(null);
+  const clientRef = useRef(null);
+  if (!clientRef.current) {
+    clientRef.current = createWorkerClient();
+  }
+  const client = clientRef.current;
 
-  const spawnWorker = useCallback(() => {
-    const worker = new Worker(`${import.meta.env.BASE_URL}webworker.js`);
-    workerRef.current = worker;
-    attachHandler(worker, pendingRef, setIsLoaded, setPluginsConfig, setPluginCatalog);
-    if (interruptBufferRef.current) {
-      worker.postMessage({
-        command: "setInterruptBuffer",
-        buffer: interruptBufferRef.current,
-      });
-    }
-  }, []);
+  const [state, setState] = useState(client.getState());
 
   useEffect(() => {
-    interruptBufferRef.current = createInterruptBuffer();
-    spawnWorker();
-    return () => workerRef.current?.terminate();
-  }, [spawnWorker]);
+    const unsubscribe = client.onStateChange(setState);
+    client.start();
+    return () => {
+      unsubscribe();
+      client.terminate();
+    };
+  }, [client]);
 
-  const call = useCallback((action, data) => {
-    return new Promise((resolve, reject) => {
-      const msgId = nextIdRef.current++;
-      pendingRef.current.set(msgId, { resolve, reject });
-      workerRef.current.postMessage({ action, data, msgId });
-    });
-  }, []);
+  const call = useCallback((action, data) => client.call(action, data), [client]);
+  const installPlugin = useCallback((data) => client.installPlugin(data), [client]);
+  const interrupt = useCallback(() => client.interrupt(), [client]);
+  const restart = useCallback(() => client.restart(), [client]);
 
-  // Install a plugin at runtime (micropip in the worker), then adopt the refreshed
-  // capability catalog the worker returns so solver tabs and operation menus update
-  // live. `data` is { wheelRefs, pyodidePackages }.
-  const installPlugin = useCallback(
-    async (data) => {
-      const catalog = await call("installPlugin", data);
-      if (catalog) setPluginCatalog(catalog);
-      return catalog;
-    },
-    [call]
-  );
-
-  // Raise KeyboardInterrupt inside the running Python operation. Returns false
-  // when the interrupt buffer is unavailable (caller should restart instead).
-  const interrupt = useCallback(() => {
-    if (!interruptBufferRef.current) return false;
-    interruptBufferRef.current[0] = 2; // SIGINT; Pyodide resets it to 0
-    return true;
-  }, []);
-
-  const restart = useCallback(() => {
-    workerRef.current?.terminate();
-    for (const { reject } of pendingRef.current.values()) {
-      reject(new Error("Worker restarted"));
-    }
-    pendingRef.current.clear();
-    setIsLoaded(false);
-    spawnWorker();
-  }, [spawnWorker]);
-
-  return { isLoaded, pluginsConfig, pluginCatalog, call, installPlugin, interrupt, restart };
+  return {
+    isLoaded: state.isLoaded,
+    pluginsConfig: state.pluginsConfig,
+    pluginCatalog: state.pluginCatalog,
+    call,
+    installPlugin,
+    interrupt,
+    restart,
+  };
 }

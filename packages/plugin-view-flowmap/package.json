@@ -1,0 +1,16 @@
+{
+  "name": "@flamapy/plugin-view-flowmap",
+  "version": "3.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "description": "Feature flow map view plugin (d3 Sankey over a numerical attribute; BDD-gated).",
+  "dependencies": {
+    "@flamapy/ide-plugin-api": "*",
+    "@flamapy/plugin-flamapy-engine": "*",
+    "@flamapy/web-ui": "*"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0"
+  }
+}

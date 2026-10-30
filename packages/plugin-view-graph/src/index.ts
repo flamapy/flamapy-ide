@@ -1,0 +1,1 @@
+export { graphViewPlugin } from './plugin';

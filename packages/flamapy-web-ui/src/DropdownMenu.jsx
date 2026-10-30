@@ -14,7 +14,7 @@ const DropdownMenu = ({
   const [menuStyle, setMenuStyle] = useState(null);
 
   const selectableOptions = options?.filter(
-    (o) => o.type !== "section" && o.type !== "divider"
+    (o) => o.type !== "section" && o.type !== "divider" && !o.disabled
   ) ?? [];
 
   const handleToggle = () => {
@@ -79,7 +79,10 @@ const DropdownMenu = ({
   let selectableIdx = -1;
 
   return (
-    <div ref={dropdownRef} className="relative inline-block w-max z-50" onKeyDown={handleKeyDown}>
+    // No z-index on the wrapper: it would create a stacking context per dropdown, trapping
+    // the open (fixed, z-50) menu at the same level as every other dropdown's button, so
+    // a later one in the DOM (e.g. the configurator panel's) painted over the open menu.
+    <div ref={dropdownRef} className="relative inline-block w-max" onKeyDown={handleKeyDown}>
       <button
         onClick={handleToggle}
         className={className}
@@ -109,11 +112,13 @@ const DropdownMenu = ({
           role="menu"
         >
           {options?.length ? (
-            options.map((option) => {
+            options.map((option, position) => {
+              // Options may carry a `key` (plugin items can repeat a label) and a `title`.
+              const key = option.key ?? option.label;
               if (option.type === "section") {
                 return (
                   <div
-                    key={option.label}
+                    key={key}
                     className="px-4 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wide"
                   >
                     {option.label}
@@ -121,12 +126,27 @@ const DropdownMenu = ({
                 );
               }
               if (option.type === "divider") {
-                return <div key={option.label} className="border-t border-gray-200 my-1" />;
+                return <div key={key ?? `divider-${position}`} className="border-t border-gray-200 dark:border-white/10 my-1" />;
+              }
+              if (option.disabled) {
+                return (
+                  <div
+                    key={key}
+                    title={option.title}
+                    className="w-full text-left py-1.5 px-3 text-[13px] text-gray-400 dark:text-gray-500 cursor-not-allowed"
+                    role="option"
+                    aria-disabled="true"
+                    aria-selected={false}
+                  >
+                    {option.label}
+                  </div>
+                );
               }
               const idx = ++selectableIdx;
               return (
                 <div
-                  key={option.label}
+                  key={key}
+                  title={option.title}
                   ref={(el) => (itemRefs.current[idx] = el)}
                   onClick={() => handleAction(option)}
                   onKeyDown={(e) => e.key === "Enter" && handleAction(option)}
