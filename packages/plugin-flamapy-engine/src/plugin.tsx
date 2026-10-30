@@ -17,6 +17,8 @@ import BackendSettingsModal from './ui/BackendSettingsModal.jsx';
 // @ts-expect-error untyped JSX components
 import ModelInformationPanel from './ui/ModelInformationPanel.jsx';
 
+import { version } from '../package.json';
+
 export const MODEL_INFO_PANEL_ID = 'flamapy.engine.modelInformation';
 
 const infoIcon = createElement(
@@ -55,7 +57,7 @@ export const flamapyEnginePlugin: FlamapyPlugin = {
   manifest: {
     id: 'flamapy.engine',
     name: 'Flamapy Analysis Engine',
-    version: '3.0.0',
+    version,
     description:
       'Runs flamapy in your browser (or on a flamapy REST server): validates the model, runs the analysis operations of every installed flamapy plugin and manages solver backends.',
     authors: [{ name: 'flamapy team', url: 'https://flamapy.github.io' }],

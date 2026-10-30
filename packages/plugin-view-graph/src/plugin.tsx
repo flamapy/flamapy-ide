@@ -10,6 +10,8 @@ import {
 // @ts-expect-error web-ui is untyped JSX
 import FeatureModelVisualization from '@flamapy/web-ui/src/FeatureModelVisualization.jsx';
 
+import { version } from '../package.json';
+
 export const GRAPH_VIEW_ID = 'flamapy.view.graph';
 
 /** The `constraints` block lines, straight from the UVL text (rendered under the tree). */
@@ -69,7 +71,7 @@ export const graphViewPlugin: FlamapyPlugin = {
   manifest: {
     id: 'flamapy.view.graph.plugin',
     name: 'Feature Model Graph',
-    version: '3.0.0',
+    version,
     description:
       'Draws the feature tree and its cross-tree constraints as an interactive graph.',
     authors: [{ name: 'flamapy team', url: 'https://flamapy.github.io' }],

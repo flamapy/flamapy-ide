@@ -11,7 +11,7 @@ beforeEach(() => {
 });
 
 import type { WorkerClient, WorkerClientState } from '@flamapy/web-core';
-import { createWorkerServices } from './workerService';
+import { createWorkerServices, wheelVersion } from './workerService';
 
 function fakeClient() {
   let state: WorkerClientState = { isLoaded: false, pluginsConfig: null, pluginCatalog: null };
@@ -122,6 +122,18 @@ describe('worker services', () => {
       ]);
     });
 
+    it("takes each plugin's version from its own flamapy wheel", () => {
+      const { client, emit } = fakeClient();
+      const services = createWorkerServices(client);
+      emit({ isLoaded: true, pluginsConfig: config, pluginCatalog: catalog });
+      expect(services.worker.flamapyPlugins().map(({ key, version }) => ({ key, version }))).toEqual([
+        { key: 'sat', version: '2.6.0' },
+        { key: 'z3', version: '2.6.0' },
+        { key: 'sdd', version: undefined },
+        { key: 'dnnf', version: undefined },
+      ]);
+    });
+
     it('removes a preinstalled plugin by restarting the engine without it', async () => {
       const { client, emit, restarts } = fakeClient();
       const services = createWorkerServices(client);
@@ -177,5 +189,18 @@ describe('worker services', () => {
       expect(services.worker.urlPythonPlugins()).toEqual([]);
       expect(restarts).toHaveLength(1);
     });
+  });
+});
+
+describe('wheelVersion', () => {
+  it.each([
+    [['flamapy_sat-2.6.0-py3-none-any.whl'], '2.6.0'],
+    [['pysdd-1.0.6-cp312-cp312-pyodide_2024_0_wasm32.whl', 'flamapy_sdd-2.6.0-py3-none-any.whl'], '2.6.0'],
+    [['https://example.org/dl/flamapy_cool-1.0.dev3-py3-none-any.whl?raw=1'], '1.0.dev3'],
+    [['https://example.org/my_plugin-0.4-py3-none-any.whl'], '0.4'],
+    [['pysdd.whl'], undefined],
+    [[], undefined],
+  ])('%j -> %s', (refs, expected) => {
+    expect(wheelVersion(refs)).toBe(expected);
   });
 });

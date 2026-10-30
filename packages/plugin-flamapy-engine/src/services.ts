@@ -52,6 +52,8 @@ export interface FlamapyPluginInfo {
   note?: string;
   /** Source code of the plugin (https). */
   repository?: string;
+  /** Version of the plugin's own wheel (e.g. `2.6.0`), when the served file name has one. */
+  version?: string;
   /** Installed, by the user's choice or by default: boots with the engine. */
   installed: boolean;
   /** Loaded in the running engine (its backend is in the catalog). */

@@ -15,6 +15,8 @@ import Wizard from '@flamapy/web-ui/src/Wizard.jsx';
 // @ts-expect-error untyped JSX
 import FeatureTree from '@flamapy/web-ui/src/FeatureTree.jsx';
 
+import { version } from '../package.json';
+
 export const CONFIGURATOR_VIEW_ID = 'flamapy.view.configurator';
 export const CONFIG_SIDEBAR_ID = 'flamapy.sidebar.configuration';
 
@@ -52,7 +54,7 @@ export const configuratorPlugin: FlamapyPlugin = {
   manifest: {
     id: 'flamapy.configurator.plugin',
     name: 'Interactive Configurator',
-    version: '3.0.0',
+    version,
     description:
       'Build a configuration step by step: flamapy answers each selection and propagates its consequences.',
     authors: [{ name: 'flamapy team', url: 'https://flamapy.github.io' }],

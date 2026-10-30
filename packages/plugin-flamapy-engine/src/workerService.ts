@@ -61,6 +61,21 @@ function wheelRef(wheel: string): string {
   return wheel.includes('://') ? wheel : `flamapy/${wheel}`;
 }
 
+// Wheel file names are `<distribution>-<version>[-<tags>].whl` (PEP 427).
+function wheelFileVersion(ref: string): string | undefined {
+  const file = ref.split(/[?#]/)[0]!.split('/').pop() ?? '';
+  return /^[^-]+-(\d[^-]*?)(?:-.*)?\.whl$/i.exec(file)?.[1];
+}
+
+/**
+ * The version of a plugin from its wheels: that of its own flamapy wheel (its dependency
+ * wheels, e.g. pysdd, have versions of their own), else of the first wheel.
+ */
+export function wheelVersion(refs: string[]): string | undefined {
+  const own = refs.find((ref) => /^flamapy/i.test(ref.split('/').pop() ?? '')) ?? refs[0];
+  return own ? wheelFileVersion(own) : undefined;
+}
+
 export function loadInstalledPlugins(): PythonPluginDescriptor[] {
   try {
     const raw = localStorage.getItem(INSTALLED_PLUGINS_KEY);
@@ -187,6 +202,7 @@ export function createWorkerServices(
         available: plugin.available !== false,
         note: plugin.note,
         repository: plugin.repository,
+        version: wheelVersion(plugin.wheels),
         installed: plugin.available !== false && (choices[plugin.key] ?? plugin.preinstalled === true),
         loaded: loaded.has(plugin.backend),
       }));

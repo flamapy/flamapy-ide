@@ -19,6 +19,8 @@ import ParetoFrontChart from '@flamapy/web-ui/src/ParetoFrontChart.jsx';
 // @ts-expect-error untyped JSX
 import AttributeOptimizationModal from './ui/AttributeOptimizationModal.jsx';
 
+import { version } from '../package.json';
+
 export const CONFIG_DIST_VIEW_ID = 'flamapy.view.configdist';
 export const FIP_VIEW_ID = 'flamapy.view.fip';
 export const PARETO_VIEW_ID = 'flamapy.view.paretofront';
@@ -118,7 +120,7 @@ export const chartsViewPlugin: FlamapyPlugin = {
   manifest: {
     id: 'flamapy.view.charts.plugin',
     name: 'Analysis Charts',
-    version: '3.0.0',
+    version,
     description:
       'Charts of analysis results: configuration distribution, feature inclusion probabilities and the Pareto front of attribute optimisations.',
     authors: [{ name: 'flamapy team', url: 'https://flamapy.github.io' }],

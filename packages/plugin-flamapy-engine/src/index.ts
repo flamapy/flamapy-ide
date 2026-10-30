@@ -1,5 +1,6 @@
 export { flamapyEnginePlugin } from './plugin';
 export { validModelGate } from './gate';
+export { wheelVersion } from './workerService';
 export {
   Analysis,
   Catalog,

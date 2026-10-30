@@ -12,6 +12,8 @@ import FeatureFlowMap from '@flamapy/web-ui/src/FeatureFlowMap.jsx';
 // @ts-expect-error untyped JSX
 import AttributeSelectionModal from './ui/AttributeSelectionModal.jsx';
 
+import { version } from '../package.json';
+
 export const FLOW_MAP_VIEW_ID = 'flamapy.view.ffm';
 
 function makeAttributeModal(options: {
@@ -40,7 +42,7 @@ export const flowMapViewPlugin: FlamapyPlugin = {
   manifest: {
     id: 'flamapy.view.flowmap.plugin',
     name: 'Feature Flow Map',
-    version: '3.0.0',
+    version,
     description:
       'Maps a numerical feature attribute over the feature tree, showing where its values sit.',
     authors: [{ name: 'flamapy team', url: 'https://flamapy.github.io' }],

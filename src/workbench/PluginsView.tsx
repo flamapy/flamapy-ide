@@ -7,6 +7,7 @@ import {
   type EngineWorkerService,
   type FlamapyPluginInfo,
   type PythonPluginDescriptor,
+  wheelVersion,
 } from '@flamapy/plugin-flamapy-engine';
 
 import {
@@ -542,6 +543,7 @@ export function createPluginsView(workbench: Workbench) {
       <PluginCard
         key={plugin.key}
         name={plugin.label}
+        version={plugin.version}
         badges={flamapyBadges(plugin, engineReady)}
         subtitle={
           <>
@@ -565,6 +567,7 @@ export function createPluginsView(workbench: Workbench) {
         <PluginCard
           key={(descriptor.wheelRefs ?? []).join('|')}
           name={name}
+          version={wheelVersion(descriptor.wheelRefs ?? [])}
           badges={[{ label: 'Installed', className: green }]}
           subtitle={fromUrl(descriptor.wheelRefs?.[0] ?? '')}
           actions={[

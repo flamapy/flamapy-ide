@@ -52,7 +52,7 @@ function fakeEngine() {
     isLoaded: true,
     onStateChange: () => ({ dispose() {} }),
     flamapyPlugins: () => [
-      info({ key: 'sat', label: 'SAT', preinstalled: true, installed: true, loaded: true, repository: 'https://github.com/flamapy/pysat_metamodel' }),
+      info({ key: 'sat', label: 'SAT', version: '2.6.0', preinstalled: true, installed: true, loaded: true, repository: 'https://github.com/flamapy/pysat_metamodel' }),
       info({ key: 'sdd', label: 'SDD' }),
       info({ key: 'dnnf', label: 'd-DNNF', available: false, note: 'Needs d4.' }),
     ],
@@ -135,7 +135,10 @@ describe('Plugins view', () => {
     const dnnf = within(group).getByRole('article', { name: 'd-DNNF' });
     expect(within(dnnf).getByText('Not available in the browser')).toBeTruthy();
     expect(within(dnnf).getByRole('switch').hasAttribute('disabled')).toBe(true);
-    expect(within(group).getByRole('article', { name: 'flamapy_cool' })).toBeTruthy();
+    const cool = within(group).getByRole('article', { name: 'flamapy_cool' });
+    expect(within(sat).getByText('v2.6.0')).toBeTruthy();
+    expect(within(cool).getByText('v1.0')).toBeTruthy();
+    expect(within(dnnf).queryByText(/^v\d/)).toBeNull();
   });
 
   it('installs and removes flamapy plugins with the switch, confirming removals', async () => {
